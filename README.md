@@ -146,7 +146,7 @@ def process_data(data: dict) -> dict:
 
 ---
 
-## 🏁 **8. Fazit**
+## 🏁 **8. WebCrawler-Pro**
 ✅ **Automatisierte Task-Planung direkt aus der Datenbank**
 ✅ **Erweiterbare Datenverarbeitung durch `processing.py`**
 ✅ **Detaillierte Logging- & Sicherheitsmaßnahmen**
