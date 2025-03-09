@@ -118,6 +118,24 @@ app.debug = API_DEBUG_MODE # Debug-Modus für Flask App konfigurieren
 
 page_cache = {} # In-Memory Cache für Webseiteninhalte {url: {content: ..., timestamp: ...}}
 
+# Funktion zum Validieren von JSON
+def validate_json(json_string):
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError:
+        logging.error(f"Ungültiges JSON: {json_string}")
+        return None
+
+
+def extract_domain(url):
+    """Extrahiert den Domainnamen aus einer URL."""
+    try:
+        parsed_url = urlparse(url)
+        return parsed_url.netloc
+    except:  # Fange alle Fehler beim Parsen der URL ab
+        logging.error(f"Fehler beim Extrahieren des Domainnamens aus {url}")
+        return None
+
 def get_cached_content(url):
     """
     Gibt gecachten Inhalt zurück, falls vorhanden und gültig.
@@ -486,9 +504,24 @@ def save_to_db(url, domain_name, title, meta_description, h1_headings, keywords,
 
 # --- Web Scraping Funktionen (Caching und verbesserte URL-Validierung) ---
 
-def is_valid_url(url):
+
+def extract_domain(url: str) -> Optional[str]:
     """
-    Überprüft, ob eine URL gültig ist (erweiterte Validierung).
+    Extrahiert die Domain (netloc) aus einer vollständigen URL.
+    Zuerst wird die URL auf Gültigkeit geprüft. Falls ungültig, wird None zurückgegeben.
+    """
+    if not is_valid_url(url):
+        return None
+    parsed_url = urlparse(url)
+    return parsed_url.netloc
+
+
+def is_valid_url(url: str) -> bool:
+    """
+    Überprüft, ob eine URL gültig ist.
+    Die Funktion stellt sicher, dass das Schema (http/https) vorhanden ist und dass
+    der Domain-Teil (netloc) einer erweiterten Regex entspricht. Dadurch werden auch
+    Domains wie "https://-test.com" korrekt als ungültig erkannt.
     """
     if not url:
         return False
@@ -496,56 +529,35 @@ def is_valid_url(url):
     if not url:
         return False
     if not url.lower().startswith(('http://', 'https://')):
-        return False # Scheme muss http oder https sein
-
+        return False
     parsed_url = urlparse(url)
     if not parsed_url.netloc:
-        return False # Domain muss vorhanden sein
-
-    # Zusätzliche Prüfungen (erweiterbar):
-    if not re.match(r"^[a-zA-Z0-9.-]+$", parsed_url.netloc): # Domain-Bestandteile prüfen
         return False
-    if parsed_url.netloc.endswith("."): # Keine Domains, die mit Punkt enden
+    # Regex zur Validierung der Domain: Keine Labels, die mit einem Bindestrich beginnen oder enden.
+    if not re.match(r"^(?!-)(?:[A-Za-z0-9-]{1,63}(?<!-)\.)+[A-Za-z]{2,}$", parsed_url.netloc):
         return False
-
-    try:
-        result = urlparse(url)
-        return all([result.scheme, result.netloc]) # Scheme und netloc müssen vorhanden sein
-    except:
+    if parsed_url.netloc.startswith(".") or parsed_url.netloc.endswith("."):
         return False
-
-def extract_domain(url):
-    if not is_valid_url(url):
-        logging.error(f"Ungültige URL: '{url}'.")
-        return None
-    try:
-        parsed_url = urlparse(url)
-        return parsed_url.netloc
-    except Exception as e:
-        logging.error(f"Fehler beim Parsen der URL '{url}': {e}")
-        return None
+    if ".." in parsed_url.netloc:
+        return False
+    return True
 
 def fetch_webpage_content(url, retry_count=0):
-    """
-    Ruft den HTML-Inhalt einer Webseite ab, mit Wiederholungsversuchen und Caching.
-    Verwendet Selenium für das Rendering von JavaScript-Seiten.
-    """
-    cached_content = get_cached_content(url) # Caching Check vor dem Abruf
+    cached_content = get_cached_content(url)
     if cached_content:
-        return cached_content # Gib gecachten Inhalt zurück
-
+        return cached_content
     if retry_count >= MAX_RETRIES:
-        logging.error(f"Maximale Anzahl an Wiederholungsversuchen für URL '{url}' erreicht. Abbruch.")
+        logging.error(f"Maximale Wiederholungsversuche für URL '{url}' erreicht.")
         return None
-    if not is_valid_url(url): # URL-Validierung vor dem Abruf
+    if not is_valid_url(url):
         logging.error(f"Ungültige URL '{url}'. Abrufen abgebrochen.")
         return None
-    driver = None # Driver außerhalb des try-Blocks definieren für finally-Block
+    driver = None
     try:
         logging.info(f"Starte Browser für URL: {url} (Versuch {retry_count + 1})")
         chrome_options = Options()
-        selenium_config = config['selenium_config'] # Selenium Konfiguration laden
-        if selenium_config.get('headless', True): # Standardmäßig headless, falls nicht in Config anders definiert
+        selenium_config = config['selenium_config']
+        if selenium_config.get('headless', True):
             chrome_options.add_argument("--headless")
         if selenium_config.get('disable_gpu', True):
             chrome_options.add_argument("--disable-gpu")
@@ -555,31 +567,29 @@ def fetch_webpage_content(url, retry_count=0):
             chrome_options.add_argument("--no-sandbox")
         if selenium_config.get('disable_dev_shm_usage', True):
             chrome_options.add_argument("--disable-dev-shm-usage")
-        user_agent = selenium_config.get('user_agent', DEFAULT_CONFIG['selenium_config']['user_agent']) # User-Agent aus Config oder Default
+        user_agent = selenium_config.get('user_agent', DEFAULT_CONFIG['selenium_config']['user_agent'])
         chrome_options.add_argument(f"user-agent={user_agent}")
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
-        driver.get(url) # Synchroner Aufruf, blockiert den Event-Loop
-        content = driver.page_source # Synchroner Aufruf, blockiert den Event-Loop
-        set_cached_content(url, content) # Inhalt im Cache speichern nach erfolgreichem Abruf
+        driver.get(url)
+        content = driver.page_source
+        set_cached_content(url, content)
         return content
     except Exception as e:
-        logging.error(f"Fehler beim Abrufen der Webseite '{url}': {e} - Versuch {retry_count + 1} von {MAX_RETRIES}. Warte {RETRY_DELAY} Sekunden...")
+        logging.error(f"Fehler beim Abrufen der Webseite '{url}': {e}.")
         time.sleep(RETRY_DELAY)
-        return fetch_webpage_content(url, retry_count + 1) # Wiederholungsversuch
+        return fetch_webpage_content(url, retry_count + 1)
     finally:
         if driver:
-            driver.quit() # Browser im finally-Block schließen, um Ressourcen freizugeben
-            logging.info(f"Browser geschlossen für URL: {url} (finally-Block)")
-            driver = None # Driver explizit auf None setzen, um Ressourcen freizugeben
+            driver.quit()
+            logging.info(f"Browser geschlossen für URL: {url}")
 
 def extract_text_content(html_content):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        text_content = soup.get_text(separator='\n', strip=True)
-        return text_content
+        return soup.get_text(separator='\n', strip=True)
     except Exception as e:
-        logging.error(f"Fehler beim Extrahieren des Textinhalts: {e}", exc_info=True)
+        logging.error(f"Fehler beim Extrahieren des Textinhalts: {e}")
         return None
 
 def extract_title(html_content):
@@ -588,7 +598,7 @@ def extract_title(html_content):
         title_tag = soup.find('title')
         return title_tag.string.strip() if title_tag and title_tag.string else None
     except Exception as e:
-        logging.error(f"Fehler beim Extrahieren des Titels: {e}", exc_info=True)
+        logging.error(f"Fehler beim Extrahieren des Titels: {e}")
         return None
 
 def extract_meta_description(html_content):
@@ -597,7 +607,7 @@ def extract_meta_description(html_content):
         meta_tag = soup.find('meta', attrs={'name': 'description'})
         return meta_tag['content'].strip() if meta_tag and 'content' in meta_tag.attrs else None
     except Exception as e:
-        logging.error(f"Fehler beim Extrahieren der Meta-Description: {e}", exc_info=True)
+        logging.error(f"Fehler beim Extrahieren der Meta-Description: {e}")
         return None
 
 def extract_h1_headings(html_content):
@@ -606,7 +616,7 @@ def extract_h1_headings(html_content):
         h1_tags = soup.find_all('h1')
         return [tag.get_text(strip=True) for tag in h1_tags]
     except Exception as e:
-        logging.error(f"Fehler beim Extrahieren der H1-Überschriften: {e}", exc_info=True)
+        logging.error(f"Fehler beim Extrahieren der H1-Überschriften: {e}")
         return None
 
 def extract_keywords(text_content, top_n=10, custom_stopwords=None):
@@ -615,51 +625,82 @@ def extract_keywords(text_content, top_n=10, custom_stopwords=None):
     try:
         words = text_content.lower().split()
         nltk_stopwords_de = set(stopwords.words('german'))
-        default_stopwords = set(['und', 'der', 'die', 'das', 'ist', 'für', 'mit', 'von', 'zu', 'in', 'auf', 'bei', 'über', 'aus', 'durch', 'an', 'als', 'auch', 'sich', 'es', 'ein', 'eine', 'einen', 'dem', 'den', 'des', 'dass', 'nicht', 'aber', 'oder', 'weil', 'wenn', 'wir', 'uns', 'ihr', 'euch', 'sie', 'ihnen', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'sie', 'mein', 'dein', 'sein', 'ihr', 'unser', 'euer', 'ihr', 'kein', 'mehr', 'sehr', 'etwas', 'nichts', 'viel', 'wenig', 'gut', 'schlecht', 'groß', 'klein', 'neu', 'alt'])
-
+        default_stopwords = set(['und', 'der', 'die', 'das', 'ist', 'für', 'mit', 'von', 'zu', 'in', 'auf', 'bei', 'über', 'aus',
+                                 'durch', 'an', 'als', 'auch', 'sich', 'es', 'ein', 'eine', 'einen', 'dem', 'den', 'des',
+                                 'dass', 'nicht', 'aber', 'oder', 'weil', 'wenn', 'wir', 'uns', 'ihr', 'euch', 'sie', 'ihnen',
+                                 'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'sie', 'mein', 'dein', 'sein', 'ihr', 'unser',
+                                 'euer', 'ihr', 'kein', 'mehr', 'sehr', 'etwas', 'nichts', 'viel', 'wenig', 'gut', 'schlecht',
+                                 'groß', 'klein', 'neu', 'alt'])
         stopwords_list = nltk_stopwords_de.union(default_stopwords)
-
         if custom_stopwords:
-            # Sanitize custom stopwords (einfache Validierung, erweiterbar)
             custom_stopwords_list_raw = custom_stopwords.split(',')
-            custom_stopwords_list = set(sw.strip() for sw in custom_stopwords_list_raw if sw.strip().isalpha()) # Nur alphabetische Stopwörter erlauben
+            custom_stopwords_list = set(sw.strip() for sw in custom_stopwords_list_raw if sw.strip().isalpha())
             stopwords_list = stopwords_list.union(custom_stopwords_list)
-
         filtered_words = [word for word in words if word.isalpha() and word not in stopwords_list and len(word) > 2]
         word_counts = Counter(filtered_words)
         top_keywords = [word for word, count in word_counts.most_common(top_n)]
         return top_keywords
     except Exception as e:
-        logging.error(f"Fehler beim Extrahieren von Keywords: {e}", exc_info=True)
+        logging.error(f"Fehler beim Extrahieren von Keywords: {e}")
         return []
 
-def is_safe_css_selector(selector):
+def validate_json(json_string: str) -> Optional[dict]:
     """
-    Grundlegende Prüfung auf potenziell unsichere CSS-Selektoren (erweiterbar).
-    Verhindert einfache Injection-Versuche und prüft Eigenschaften-Whitelist.
-    **Diese Funktion ist ein einfaches Beispiel und sollte für Produktionsumgebungen erweitert werden.**
+    Versucht, einen JSON-String in ein Python-Dictionary zu parsen.
+    Falls der JSON-String ungültig ist, wird None zurückgegeben und ein Fehler geloggt.
     """
-    unsafe_patterns = [r'script', r'expression', r'javascript:'] # Beispiele für unsichere Muster
-    selector_lower = selector.lower()
-    if any(re.search(pattern, selector_lower) for pattern in unsafe_patterns):
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError as e:
+        logging.error(f"Ungültiges JSON-Format: {e}")
+        return None
+
+        
+def is_safe_css_selector(selector: str) -> bool:
+    """
+    Prüft, ob ein CSS-Selektor sicher ist.
+    Es werden potenziell gefährliche Muster (z. B. JavaScript-Injektion, CSS-Expression)
+    sowie unzulässige Selektoren (z. B. der exakte Selektor "script") blockiert.
+    """
+    if not isinstance(selector, str) or not selector.strip():
         return False
 
-    # Whitelist-Prüfung für CSS-Eigenschaften (sehr einfach, erweiterbar)
-    selector_parts = selector.split('{') # Einfache Aufteilung, funktioniert nicht für komplexe Selektoren
-    if len(selector_parts) > 1:
-        properties_values = selector_parts[1].rstrip('}').split(';')
+    selector_lower = selector.lower()
+
+    # Liste unsicherer Muster:
+    unsafe_patterns = [
+        r"^\s*script\s*$",             # exakter Match für "script"
+        r"<\s*script.*?>",             # HTML <script>-Tags
+        r"expression\s*\(",            # CSS expression() Funktion
+        r"javascript\s*:",             # javascript: Schema
+        r"url\s*\(\s*[^\s]*javascript\s*:", # javascript: in url()
+        r"@import",                   # @import-Anweisung
+        r"on\w+(\*?)\s*=",             # Event-Handler (z. B. onclick, onmouseover), inkl. möglichem "*=" Operator
+        r"data\s*:"                   # data: URLs
+    ]
+
+    # Überprüfung der Muster im Selektor
+    for pattern in unsafe_patterns:
+        if re.search(pattern, selector_lower):
+            logging.warning(f"Unsicherer CSS-Selektor erkannt: {selector}")
+            return False
+
+    # Falls der Selektor Stil-Deklarationen enthält, werden nur erlaubte CSS-Eigenschaften zugelassen.
+    if "{" in selector and "}" in selector:
+        properties_values = selector.split('{')[1].rstrip('}').split(';')
         for prop_val in properties_values:
             if ':' in prop_val:
-                prop = prop_val.split(':', 1)[0].strip() # Nur Eigenschaftsteil extrahieren
-                if prop not in ALLOWED_CSS_PROPERTIES: # Eigenschaft gegen Whitelist prüfen
-                    logging.warning(f"CSS-Eigenschaft '{prop}' nicht in Whitelist. Selektor als unsicher markiert.")
-                    return False # Nicht erlaubte Eigenschaft gefunden -> unsicher
+                prop = prop_val.split(':', 1)[0].strip()
+                if prop not in ALLOWED_CSS_PROPERTIES:
+                    logging.warning(f"Nicht erlaubte CSS-Eigenschaft '{prop}' in Selektor gefunden.")
+                    return False
 
     return True
 
+
 def extract_data_css(html_content, css_selectors_json):
     """
-    Extrahiert Daten aus HTML-Content basierend auf CSS-Selektoren, die als JSON übergeben werden.
+    Extrahiert Daten aus HTML-Content basierend auf CSS-Selektoren, die als JSON-String übergeben werden.
     """
     if not html_content or not css_selectors_json:
         return {}
@@ -669,32 +710,39 @@ def extract_data_css(html_content, css_selectors_json):
         return {"error": "Ungültiges CSS-Selektor JSON-Format"}
     
     extracted_data = {}
-    soup = BeautifulSoup(html_content, 'html.parser')  # Einmaliges Parsen zur Performance-Optimierung
+    soup = BeautifulSoup(html_content, 'html.parser')
     
     for name, selector_config in css_selectors.items():
+        selector_raw = None  # Initialisieren von selector_raw
+        data_type = None
+        cleanup_functions = []
+
         if isinstance(selector_config, dict):
             selector_raw = selector_config.get('selector')
-            data_type = selector_config.get('type', None)
+            data_type = selector_config.get('type') # 'type'  muss nicht None sein, kann string, integer, float usw. sein
             cleanup_functions = selector_config.get('cleanup', [])
-        else:
+        elif isinstance(selector_config, str): # Wenn nur der Selektor als String angegeben ist
             selector_raw = selector_config
-            data_type = None
-            cleanup_functions = []
+        else:
+            logging.warning(f"Ungültige Konfiguration für Selektor '{name}': {selector_config}")
+            continue
 
-        if not isinstance(selector_raw, str) or not is_safe_css_selector(selector_raw):
+        if selector_raw is not None and not is_safe_css_selector(selector_raw):
             logging.warning(f"Potenziell unsicherer CSS-Selektor '{selector_raw}' für '{name}'. Selektor wird übersprungen.")
             continue
-        
+        elif selector_raw is None:
+            logging.warning(f"Kein Selektor für '{name}' gefunden.")
+            continue
+
         elements = soup.select(selector_raw)
         if elements:
             extracted_values = [element.get_text(strip=True) for element in elements]
-            
-            # Datenbereinigung anwenden
+
             for cleanup_func_name in cleanup_functions:
                 if cleanup_func_name == 'lower':
                     extracted_values = [val.lower() for val in extracted_values]
 
-            # Datentyp-Konvertierung
+
             if data_type:
                 converted_values = []
                 for value in extracted_values:
@@ -703,18 +751,21 @@ def extract_data_css(html_content, css_selectors_json):
                             converted_values.append(int(value))
                         elif data_type == 'float':
                             converted_values.append(float(value))
+                        elif data_type == "string": # String Typ explizit behandeln
+                            converted_values.append(str(value))
                         else:
-                            logging.warning(f"Unbekannter Datentyp '{data_type}' für Selektor '{name}'.")
-                            converted_values.append(value)
-                    except ValueError:
-                        logging.warning(f"Konvertierungsfehler für Wert '{value}' mit Typ '{data_type}'. Standardwert (None) verwendet.")
-                        converted_values.append(None)
+                            logging.warning(f"Unbekannter Datentyp '{data_type}' für Selektor '{name}'. Wert wird als String behandelt.")
+                            converted_values.append(str(value)) # Default zu String, wenn unbekannter Typ
+                    except (ValueError, TypeError) as e:
+                        logging.warning(f"Konvertierungsfehler für Wert '{value}' mit Typ '{data_type}': {e}. Wert wird übersprungen.")
+                        converted_values.append(None)  # oder einen anderen Standardwert
                 extracted_data[name] = converted_values
             else:
-                extracted_data[name] = extracted_values
-            
-            if not extracted_data[name]:
-                del extracted_data[name]
+                 extracted_data[name] = extracted_values
+
+
+            if not extracted_data[name]: # Leere Liste entfernen
+                del extracted_data[name] 
         else:
             logging.warning(f"CSS-Selektor '{selector_raw}' für '{name}' lieferte keine Ergebnisse.")
     
