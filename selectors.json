@@ -1,4 +1,5 @@
 {
-    "title": "h1",
-    "description": "p"
+  "title": {"selector": "title", "type": "string"},
+  "h1": {"selector": "h1", "type": "string"},
+  "preise": {"selector": ".preis", "type": "float", "cleanup": ["lower"]}
 }
