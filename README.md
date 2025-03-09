@@ -148,15 +148,128 @@ def process_data(data: dict) -> dict:
 🔐 **Alle API-Endpunkte erfordern API-Authentifizierung!**
 
 ---
-**Weboberfläche**
-```sh
+## **Weboberfläche**
+
+Mit dem Befehl `streamlit run app.py -- --streamlit` starten Sie die Weboberfläche zur bequemen Verwaltung Ihrer Webcrawling-Tasks.  Sie benötigen hierfür einen gültigen API-Key.
+
+**API-Key Eingabe:**
+
+Nach dem Start der Weboberfläche werden Sie aufgefordert, Ihren API-Key einzugeben.  Dieser dient zur Authentifizierung und Autorisierung des Zugriffs auf die Funktionen der Weboberfläche. Geben Sie Ihren API-Key in das dafür vorgesehene Feld ein und bestätigen Sie mit Enter. Ein ungültiger API Key führt zu einer Fehlermeldung.
+
+**Anzeige geplanter Tasks:**
+
+Die Weboberfläche listet alle geplanten Tasks übersichtlich auf. Für jeden Task werden folgende Informationen angezeigt:
+
+* **Task ID:** Eindeutige Identifikationsnummer des Tasks.
+* **URL:** Die zu crawlende Webseite.
+* **Zeitplan:**  Definiert, wann der Task ausgeführt wird (z.B. stündlich, täglich um 10:00, alle 30 Minuten).
+* **Nur Text:**  Gibt an, ob nur der Textinhalt oder der gesamte HTML-Code extrahiert werden soll.
+* **Stopwörter:**  Auflistung der Stopwörter, die bei der Keyword-Extraktion ignoriert werden.
+* **CSS-Selektoren:**  Die verwendeten CSS-Selektoren zur gezielten Datenextraktion.
+* **Datei speichern:**  Gibt an, ob die extrahierten Daten zusätzlich zur Datenbank in einer Datei gespeichert werden sollen.
+* **Verarbeitungsfunktion:**  Pfad zur benutzerdefinierten Verarbeitungsfunktion (optional).
+* **Status:**  Aktueller Status des Tasks (z.B. `pending`, `running`, `success`, `failure`).
+* **Letzte Ausführung:**  Zeitstempel der letzten Ausführung.
+* **Nächste Ausführung:**  Zeitstempel der nächsten geplanten Ausführung.
+* **Fehlermeldung:**  Anzeige von etwaigen Fehlermeldungen bei der Ausführung des Tasks.
+
+
+**Aktionen für jeden Task:**
+
+* **Löschen:**  Über den Button "Task [ID] löschen" kann ein geplanter Task entfernt werden.
+* **Sofort ausführen:** Mit dem Button "Task [ID] sofort ausführen" kann ein Task unabhängig vom Zeitplan manuell gestartet werden.  Der Status aktualisiert sich nach der Ausführung.
+
+**Hinzufügen eines neuen Tasks:**
+
+Im Bereich "Neuen Task hinzufügen" können Sie neue Crawling-Tasks erstellen.  Füllen Sie die folgenden Felder aus:
+
+* **URL:**  Die URL der zu crawlenden Webseite.
+* **Zeitplan:**  Definieren Sie den Ausführungszeitplan des Tasks. Gültige Formate sind: "stündlich", "täglich um HH:MM" oder "alle X minuten".
+* **Nur Text extrahieren:** Aktivieren Sie diese Option, um nur den Textinhalt der Webseite zu extrahieren.
+* **Stopwörter:**  Geben Sie optional eine kommagetrennte Liste von Stopwörtern ein.
+* **CSS-Selektoren:** Fügen Sie optional CSS-Selektoren im JSON-Format hinzu, um bestimmte Daten von der Webseite zu extrahieren.
+* **Datei speichern:**  Aktivieren Sie diese Option, um die extrahierten Daten in einer Datei zu speichern.
+* **Verarbeitungsfunktion:** Geben Sie optional den Pfad zu einer benutzerdefinierten Verarbeitungsfunktion an.
+
+
+Nach dem Ausfüllen der Felder klicken Sie auf "Task hinzufügen", um den neuen Task zu speichern und zu planen.  Die Weboberfläche aktualisiert sich automatisch und zeigt den neu hinzugefügten Task an.  Fehler bei der Eingabe werden direkt angezeigt.
+
+```
+```bash
 streamlit run app.py -- --streamlit
 ```
 
 ![image](https://github.com/user-attachments/assets/d2b6b9aa-ebaa-4450-8870-0096207fb2e1)
 
 ---
+---
+## **Hier sind einige Beispieleingaben für die Streamlit-Weboberfläche deines WebCrawler-Pro**
 
+**Beispiel 1: Einfacher Webseiten-Crawl**
+
+* **URL:** `https://www.example.com`
+* **Zeitplan:** `täglich um 10:00`
+* **Nur Text extrahieren:** (deaktiviert)
+* **Stopwörter:**
+* **CSS-Selektoren:**
+* **Datei speichern:** (aktiviert)
+* **Verarbeitungsfunktion:**
+
+
+Dieser Task crawlt täglich um 10:00 Uhr die Webseite `https://www.example.com` und speichert den gesamten HTML-Inhalt in einer Datei.  Es werden keine Stopwörter, CSS-Selektoren oder Verarbeitungsfunktionen verwendet.
+
+**Beispiel 2: Text-Extraktion mit Stopwörtern**
+
+* **URL:** `https://www.wikipedia.org`
+* **Zeitplan:** `alle 60 minuten`
+* **Nur Text extrahieren:** (aktiviert)
+* **Stopwörter:** `und, die, der, das, ist`
+* **CSS-Selektoren:**
+* **Datei speichern:** (aktiviert)
+* **Verarbeitungsfunktion:**
+
+
+Dieser Task extrahiert stündlich den Textinhalt von `https://www.wikipedia.org`. Die angegebenen Stopwörter werden bei der Keyword-Extraktion ignoriert. Der extrahierte Text wird in einer Datei gespeichert.
+
+**Beispiel 3: Datenextraktion mit CSS-Selektoren**
+
+* **URL:** `https://www.amazon.de/`
+* **Zeitplan:** `stündlich`
+* **Nur Text extrahieren:** (deaktiviert)
+* **Stopwörter:**
+* **CSS-Selektoren:**
+```json
+{
+  "product_title": "h2.a-size-mini a.a-link-normal span",
+  "product_price": "span.a-price span.a-offscreen"
+}
+```
+* **Datei speichern:** (deaktiviert)
+* **Verarbeitungsfunktion:** `./PROCESSING_FUNCTIONS_DIR/#1 custom_processing.py`
+
+
+Dieser Task crawlt stündlich Amazon und extrahiert Produkttitel und -preise mithilfe der angegebenen CSS-Selektoren. Die extrahierten Daten werden mit der angegebenen Verarbeitungsfunktion weiterverarbeitet und in der Datenbank gespeichert. Beachte, dass der Pfad zur Verarbeitungsfunktion relativ zum Ausführungsverzeichnis des Crawlers sein muss.
+
+
+**Beispiel 4:  Kombination aller Funktionen**
+
+* **URL:** `https://www.heise.de`
+* **Zeitplan:** `täglich um 06:00`
+* **Nur Text extrahieren:** (aktiviert)
+* **Stopwörter:** `mit, von, am, im`
+* **CSS-Selektoren:** `{"article_title": "h2 a"}`
+* **Datei speichern:** (aktiviert)
+* **Verarbeitungsfunktion:** `./PROCESSING_FUNCTIONS_DIR/#2 custom_processing.py` (oder ein anderer gültiger Pfad)
+
+
+Dieser Task kombiniert alle verfügbaren Funktionen. Er crawlt täglich um 6:00 Uhr heise.de, extrahiert den Textinhalt, filtert die angegebenen Stopwörter, extrahiert Artikeltitel mithilfe des CSS-Selektors, speichert den Textinhalt in einer Datei und verarbeitet die Daten mit der angegebenen Funktion.
+
+**Wichtig:**
+
+* **Gültige Pfade für Verarbeitungsfunktionen:** Achte darauf, dass die Pfade zu den Verarbeitungsfunktionen korrekt und relativ zum Ausführungsverzeichnis des Crawlers angegeben sind.  Die Beispiele oben gehen davon aus, dass sich die `custom_processing.py` Dateien im Verzeichnis `PROCESSING_FUNCTIONS_DIR` befinden.
+* **JSON-Format für CSS-Selektoren:** Die CSS-Selektoren müssen in einem gültigen JSON-Format angegeben werden.
+* **Testen:** Teste die Eingaben gründlich, um sicherzustellen, dass sie die gewünschten Ergebnisse liefern.
+---
 ## 🏁 **9. WebCrawler-Pro**
 ✅ **Automatisierte Task-Planung direkt aus der Datenbank**
 ✅ **Erweiterbare Datenverarbeitung durch `processing.py`**
