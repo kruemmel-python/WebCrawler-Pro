@@ -1361,20 +1361,24 @@ def run_streamlit():
                 st.write(f"Nächste Ausführung: {task['next_run_time']}")
                 st.write(f"Fehlermeldung: {task['error_message']}")
 
+
                 # Task löschen
                 if st.button(f"Task {task['id']} löschen"):
                     if delete_scheduled_task_from_db(task['id']):
                         st.success("Task erfolgreich gelöscht.")
-                        setup_scheduled_tasks()  # Tasks neu laden
-                        st.experimental_rerun()  # Streamlit neu laden
+                        setup_scheduled_tasks()
+                        st.rerun()  # Hier ist es korrekt
                     else:
                         st.error("Fehler beim Löschen des Tasks.")
 
                 # Task sofort ausführen
                 if st.button(f"Task {task['id']} sofort ausführen"):
-                     api_run_scheduled_task_by_id(task['id'])
-                     st.success("Task wird ausgeführt.") # Bestätigung anzeigen
-                     st.experimental_rerun() # Streamlit neu laden
+                    result = api_run_scheduled_task_by_id(task['id']) # result auffangen
+                    if result.status_code == 202:  # Ausführung gestartet
+                        st.success("Task wird ausgeführt.")
+                        st.rerun()  # Hier ist es korrekt
+                    else:
+                        st.error(f"Fehler beim Starten des Tasks: {result.json().get('message', 'Unbekannter Fehler')}") # Fehler anzeigen
 
     else:
         st.info("Keine geplanten Tasks gefunden.")
@@ -1406,7 +1410,7 @@ def run_streamlit():
             if save_scheduled_task_to_db(task_data):
                 st.success("Task erfolgreich hinzugefügt.")
                 setup_scheduled_tasks() # Tasks neu laden
-                st.experimental_rerun()  # Streamlit neu laden
+                st.rerun()  # Streamlit neu laden
             else:
                 st.error("Fehler beim Hinzufügen des Tasks.")
 
