@@ -1,7 +1,7 @@
 # 🚀 **WebCrawler-Pro**
 
 ## 📌 **Einführung**
-WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert **Web-Scraping, Datenverarbeitung, API-Integration, Sicherheit und Task-Planung** in einem einzigen System. Die geplante Task-Ausführung und das Monitoring erfolgen jetzt direkt über die Datenbank.
+WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert **Web-Scraping, Datenverarbeitung, API-Integration, Sicherheit und Task-Planung** in einem einzigen System. Die geplante Task-Ausführung und das Monitoring erfolgen direkt über die Datenbank.
 
 ### 🔹 **Hauptfunktionen**
 ✅ **Web-Scraping mit Selenium** (automatisiertes Abrufen von Webseiteninhalten)
