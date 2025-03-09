@@ -1,7 +1,7 @@
 # 🚀 **WebCrawler-Pro**
 
 ## 📌 **Einführung**
-WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert **Web-Scraping, Datenverarbeitung, API-Integration, Sicherheit und Task-Planung** in einem einzigen System. Die geplante Task-Ausführung und das Monitoring erfolgen direkt über die Datenbank.
+WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert **Web-Scraping, Datenverarbeitung, API-Integration, Sicherheit und Task-Planung** in einem einzigen System. Die geplante Task-Ausführung und das Monitoring erfolgen direkt über die Datenbank.  Zusätzlich bietet WebCrawler-Pro eine **intuitive Web-Oberfläche mit Streamlit**, um geplante Tasks komfortabel zu verwalten.
 
 ### 🔹 **Hauptfunktionen**
 ✅ **Web-Scraping mit Selenium** (automatisiertes Abrufen von Webseiteninhalten)
@@ -16,6 +16,7 @@ WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion,
 ✅ **Erweiterbare Sicherheitsmaßnahmen gegen Path Traversal & CSS-Injection**
 ✅ **Monitoring für geplante Tasks und API-Status über API-Endpunkte** 📊 (inkl. Start-/Endzeiten, Logs, Fehlerberichte, letzter/nächster Ausführungszeit)
 ✅ **Einfache Konfiguration über YAML-Dateien & Umgebungsvariablen** ⚙️
+✅ **Web-Oberfläche mit Streamlit zur Taskverwaltung** 🖥️
 
 📖 Diese Dokumentation beschreibt die **Installation, Konfiguration und Nutzung** des Programms.
 
@@ -28,12 +29,14 @@ WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion,
 - 📦 **pip** *(Python-Paketmanager, sollte mit Python installiert sein)*
 - 🌐 **Google Chrome + ChromeDriver** *(für Selenium-basiertes Scraping)*
 - 🧠 **NLTK Data:** *(Für Keyword-Extraktion: `python -m nltk.downloader stopwords`)*
+- 🖥️ **Streamlit:** *(Für die Web-Oberfläche: `pip install streamlit`)*
 
 ### 📥 **1.2 Abhängigkeiten installieren**
 Führe folgenden Befehl aus, um alle benötigten Pakete zu installieren:
 ```bash
 pip install -r requirements.txt
 ```
+
 
 ---
 
