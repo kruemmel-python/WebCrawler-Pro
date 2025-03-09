@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd  # Für Tabellen
+import time
 import requests
 from bs4 import BeautifulSoup
 import argparse
@@ -578,7 +580,7 @@ def extract_keywords(text_content, top_n=10, custom_stopwords=None):
         nltk_stopwords_de = set(stopwords.words('german'))
         default_stopwords = set(['und', 'der', 'die', 'das', 'ist', 'für', 'mit', 'von', 'zu', 'in', 'auf', 'bei', 'über', 'aus',
                                  'durch', 'an', 'als', 'auch', 'sich', 'es', 'ein', 'eine', 'einen', 'dem', 'den', 'des',
-                                 'dass', 'nicht', 'aber', 'oder', 'weil', 'wenn', 'wir', 'uns', 'ihr', 'euch', 'sie', 'ihnen',
+                                 'dass', 'nicht', 'aber', 'oder', 'wenn', 'wir', 'uns', 'ihr', 'euch', 'sie', 'ihnen',
                                  'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'sie', 'mein', 'dein', 'sein', 'ihr', 'unser',
                                  'euer', 'ihr', 'kein', 'mehr', 'sehr', 'etwas', 'nichts', 'viel', 'wenig', 'gut', 'schlecht',
                                  'groß', 'klein', 'neu', 'alt'])
@@ -755,7 +757,7 @@ def load_processing_function(function_path):
 def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None, css_selectors_cli=None, save_file_cli=False, processing_function_path=None, task_id=None):
     start_time = datetime.datetime.now()
     error_message = None
-    status = "pending"  # Initialer Status    
+    status = "pending"  # Initialer Status
 
     logging.info(f"Starte geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {start_time.isoformat()}")
     update_scheduled_task_running_status_db(task_id, 'running')
@@ -1297,7 +1299,7 @@ def run_command_line_scraping(args):
         error_message = "Abrufen des Webseiteninhalts fehlgeschlagen"
         status = "failure - fetch error"
         logging.error("Abrufen des Webseiteninhalts fehlgeschlagen.")
-    logging.info(f"Beende geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {datetime.datetime.now().isoformat()}. Status: {status}, Fehler: {error_message if error_message else 'Kein Fehler'}")    
+    logging.info(f"Beende geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {datetime.datetime.now().isoformat()}. Status: {status}, Fehler: {error_message if error_message else 'Kein Fehler'}")
 
 def apply_processing_function(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, css_data, processing_function_path):
     processed_content = None
@@ -1338,20 +1340,16 @@ def run_scheduled_mode():
         time.sleep(1)
 
 def run_streamlit():
-    """Streamlit-Webanwendung zur Taskverwaltung."""
-
     st.title("WebCrawler-Pro Admin-Dashboard")
 
-    # API-Key-Authentifizierung für Streamlit (einfach)
     api_key_input = st.text_input("API-Key eingeben:", type="password")
-    if not api_key_input or not validate_api_key(api_key_input):
+    if not api_key_input or not validate_api_key(api_key_input): #Wichtig kein app.validate_api_key mehr
         st.error("Ungültiger API-Key.")
         return
 
-    # Tasks laden
-    tasks = load_scheduled_tasks()
+    tasks = load_scheduled_tasks() #Wichtig kein app.load_scheduled_tasks mehr
 
-    # Tasks anzeigen
+    # Task Anzeige und Aktionen
     st.subheader("Geplante Tasks")
     if tasks:
         for task in tasks:
@@ -1368,36 +1366,43 @@ def run_streamlit():
                 st.write(f"Nächste Ausführung: {task['next_run_time']}")
                 st.write(f"Fehlermeldung: {task['error_message']}")
 
+                col1, col2 = st.columns(2)  # Nutze Columns für Layout
 
-                # Task löschen
-                if st.button(f"Task {task['id']} löschen"):
-                    if delete_scheduled_task_from_db(task['id']):
-                        st.success("Task erfolgreich gelöscht.")
-                        setup_scheduled_tasks()
-                        st.rerun()  # Hier ist es korrekt
-                    else:
-                        st.error("Fehler beim Löschen des Tasks.")
+                with col1:
+                    if st.button(f"Task {task['id']} löschen", key=f"delete_{task['id']}"):
+                        if delete_scheduled_task_from_db(task['id']): #Wichtig kein app.delete_scheduled_task_from_db mehr
+                            st.success("Task erfolgreich gelöscht.")
+                            setup_scheduled_tasks()
+                            st.rerun()  # Lade die Seite neu
+                        else:
+                            st.error("Fehler beim Löschen des Tasks.")
 
-                # Task sofort ausführen
-                if st.button(f"Task {task['id']} sofort ausführen"):
-                    # FALSCH: result = api_run_scheduled_task_by_id(task['id'])
-                    # RICHTIG:  Den API-Endpunkt simulieren, ohne den Flask-Kontext zu benötigen.
-                    url = task['url']
-                    extract_text_only = bool(task.get('text_only', False))
-                    custom_stopwords_cli = task.get('stopwords')
-                    css_selectors_cli = task.get('css_selectors')
-                    save_file_cli = bool(task.get('save_file', False))
-                    processing_function_path = task.get('processing_function_path')
-                    threading.Thread(target=scrape_and_store_url, args=(url, extract_text_only, custom_stopwords_cli, css_selectors_cli, save_file_cli, processing_function_path, task['id'])).start()
+                with col2:
+                    if st.button(f"Task {task['id']} sofort ausführen", key=f"run_{task['id']}"):
+                        #run_task(task['id'])
+                        task_id = task['id']
+                        task = get_scheduled_task_from_db(task_id)
+                        if not task:
+                            st.error(f"Task mit ID '{task_id}' nicht gefunden.")
+                            return
 
+                        url = task['url']
+                        extract_text_only = bool(task.get('text_only', False))
+                        custom_stopwords_cli = task.get('stopwords')
+                        css_selectors_cli = task.get('css_selectors')
+                        save_file_cli = bool(task.get('save_file', False))
+                        processing_function_path = task.get('processing_function_path')
 
+                        threading.Thread(target=scrape_and_store_url,
+                                         args=(url, extract_text_only, custom_stopwords_cli,
+                                               css_selectors_cli, save_file_cli, processing_function_path,
+                                               task_id)).start()
+                        st.success(f"Task '{task_id}' wird im Hintergrund ausgeführt.")
 
-                st.success("Task wird ausgeführt.")
-                st.rerun()  # Hier ist es korrekt
     else:
         st.info("Keine geplanten Tasks gefunden.")
 
-    # Neuen Task hinzufügen
+    # Task hinzufügen
     st.subheader("Neuen Task hinzufügen")
     with st.form("new_task"):
         url = st.text_input("URL:")
@@ -1415,15 +1420,15 @@ def run_streamlit():
                     css_selectors=css_selectors, save_file=save_file, processing_function_path=processing_function_path
                 )
             except ValidationError as e:
-                st.error(str(e)) # Fehler anzeigen
+                st.error(str(e))  # Validation Fehler anzeigen
                 return
 
             task_data = task_payload.model_dump()
             task_data['id'] = str(uuid.uuid4())
 
-            if save_scheduled_task_to_db(task_data):
+            if save_scheduled_task_to_db(task_data): #Wichtig kein app.save_scheduled_task_to_db mehr
                 st.success("Task erfolgreich hinzugefügt.")
-                setup_scheduled_tasks() # Tasks neu laden
+                setup_scheduled_tasks()
                 st.rerun()  # Streamlit neu laden
             else:
                 st.error("Fehler beim Hinzufügen des Tasks.")
