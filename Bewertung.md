@@ -1,14 +1,14 @@
 # **Softwarebewertung – WebCrawler-Pro**  
 **Autor: CipherCore**  
 **Datum: März 2025**  
-**Version: 1.0**  
+**Version: 1.1**  
 
 ---
 
 ## **1. Einführung**  
 WebCrawler-Pro ist eine leistungsfähige, vielseitige und sichere Anwendung zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert fortschrittliche **Scraping-Techniken** mit einer **skalierbaren API-Architektur** und bietet eine Reihe von Sicherheitsmechanismen zum Schutz der Daten und Infrastruktur.  
 
-Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherheit, Performance, Skalierbarkeit, Wartbarkeit, Testabdeckung und Dokumentation**.
+Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherheit, Performance, Skalierbarkeit, Wartbarkeit, Testabdeckung, Benutzerfreundlichkeit und Dokumentation**.
 
 ---
 
@@ -95,7 +95,26 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 
 ---
 
-## **6. Testabdeckung & Qualitätssicherung**  
+## **6. Benutzerfreundlichkeit**  
+**Bewertung: ★★★★★ (5/5)**  
+
+✔ **Intuitive Bedienung:**  
+- **Streamlit-Web-Oberfläche**, die eine einfache Verwaltung von Scraping-Tasks ermöglicht.  
+- **API-Dokumentation mit Beispielen**, um schnelle Integration zu gewährleisten.  
+
+✔ **Automatisierung & Konfiguration:**  
+- **Task-Planung direkt über UI** möglich.  
+- **Konfigurierbare YAML- und `.env`-Dateien**, um die Software an individuelle Bedürfnisse anzupassen.  
+
+✔ **Fehlermeldungen & Logging:**  
+- **Detaillierte Logging-Funktionen** helfen bei der Fehlerbehebung.  
+- **Fehlermeldungen sind klar und verständlich**, um Probleme schnell zu lösen.  
+
+✅ **Fazit:** Die Software bietet eine **intuitive Nutzerführung** mit einer **benutzerfreundlichen Web-Oberfläche und umfassender Konfigurierbarkeit**.  
+
+---
+
+## **7. Testabdeckung & Qualitätssicherung**  
 **Bewertung: ★★★★★ (5/5)**  
 
 ✔ **Umfassende Testsuite:**  
@@ -109,41 +128,13 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 ```sh
 python -m unittest discover tests
 ```
-**Die Konsolenausgabe zeigt ein Beispiel für eine Testausführung. Die Warnungen über unsichere CSS-Selektoren sind Teil der Sicherheitsprüfung und bestätigen, dass die Schutzmechanismen aktiv sind.**
-```sh
-(base) PS F:\webscrawler> python -m unittest discover tests
-.......2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: script
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: body { background: url(javascript:alert('XSS')) }
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onclick*=alert]
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div { expression(alert('XSS')) }
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[style=expression(alert('XSS'))]
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onclick=alert('XSS')]
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div { background: data:image/png;base64,abcd }
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onmouseover=alert('XSS')]
-2025-03-09 14:43:19,239 - WARNING - Unsicherer CSS-Selektor erkannt: @import url('http://evil.com');
-...2025-03-09 14:43:19,240 - INFO - Verarbeitungsfunktion 'process_data' erfolgreich aus './test_processing.py' geladen.
-.2025-03-09 14:43:19,241 - INFO - Inhalt erfolgreich in Datei '.\test.txt' gespeichert.
-.
-----------------------------------------------------------------------
-Ran 12 tests in 0.011s
 
-OK
-(base) PS F:\webscrawler>
-```
 ✅ **Fazit:** Sehr gute Testabdeckung mit Fokus auf **Sicherheits-, Integrations- und Funktionstests**.  
 
 ---
 
-## **7. Fazit & Gesamtbewertung**  
+## **8. Fazit & Gesamtbewertung**  
 ### **Gesamtbewertung: 4,9 / 5 Sterne ⭐⭐⭐⭐⭐**  
 
-| Kriterium                | Bewertung (1-5) |  
-|--------------------------|----------------|  
-| **Funktionalität**       | ⭐⭐⭐⭐⭐ (5/5)    |  
-| **Sicherheit**           | ⭐⭐⭐⭐⭐ (5/5)    |  
-| **Performance**          | ⭐⭐⭐⭐☆ (4/5)    |  
-| **Wartbarkeit**          | ⭐⭐⭐⭐⭐ (5/5)    |  
-| **Testabdeckung**        | ⭐⭐⭐⭐⭐ (5/5)    |  
-| **Dokumentation**        | ⭐⭐⭐⭐⭐ (5/5)    |  
-
 ✅ **Empfehlung:** Diese Software ist **hochwertig, sicher und flexibel** und eignet sich ideal für **mittelgroße bis große Web-Scraping-Projekte mit API-Integration**. 🚀
+
