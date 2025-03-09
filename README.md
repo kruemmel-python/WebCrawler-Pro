@@ -1,201 +1,156 @@
-# Web-Scraping und API-Programm: Umfassende Anleitung
+# 🚀 **WebCrawler-Pro**
 
-Dieses Programm ist ein vielseitiges Werkzeug zum Extrahieren von Daten aus dem Web und zur Bereitstellung dieser Daten über eine API. Es kombiniert Web-Scraping-Funktionen mit einer robusten API, um das Erfassen, Verarbeiten und Bereitstellen von Informationen zu vereinfachen. Zu den wichtigsten Funktionen gehören:
+## 📌 **Einführung**
+WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert **Web-Scraping, Datenverarbeitung, API-Integration, Sicherheit und Task-Planung** in einem einzigen System. Die geplante Task-Ausführung und das Monitoring erfolgen jetzt direkt über die Datenbank.
 
-* **Web-Scraping:** Automatisches Abrufen von Webseiteninhalten mithilfe von Selenium.
-* **Datenextraktion:** Extrahieren von Text, Titeln, Metadaten, Überschriften und Schlüsselwörtern.
-* **CSS-Selektoren:** Gezielte Extraktion von Daten mithilfe von CSS-Selektoren.
-* **Datenverarbeitung:** Anwenden benutzerdefinierter Funktionen zur Verarbeitung der extrahierten Daten.
-* **API:** Zugriff auf gescrapte und verarbeitete Daten über HTTP-Endpunkte.
-* **Task-Planung:** Automatisieren von Scraping-Aufgaben in regelmäßigen Abständen.
-* **API-Authentifizierung:** Schutz der API mithilfe von API-Keys.
-* **Ratenbegrenzung:** Begrenzung der Anzahl von API-Anfragen, um Missbrauch zu verhindern.
-* **Caching:** Speichern von Webseiteninhalten im Cache, um die Leistung zu verbessern.
-* **Datenbankintegration:** Speichern von gescrapten Daten in einer SQLite-Datenbank.
-* **Sicherheit:** Robuste Maßnahmen zum Schutz vor Sicherheitslücken wie Path Traversal und CSS-Injection.
-* **Monitoring:** Detaillierte Statusberichte für geplante Aufgaben (einschließlich Start-/Endzeiten, letzter Ausführungszeit, nächster Ausführungszeit und Fehlermeldungen).
-* **Konfiguration:** Umfassende Konfiguration über YAML-Dateien und Umgebungsvariablen.
+### 🔹 **Hauptfunktionen**
+✅ **Web-Scraping mit Selenium** (automatisiertes Abrufen von Webseiteninhalten)
+✅ **Gezielte Datenextraktion mit CSS-Selektoren** (inkl. Typkonvertierung & Datenbereinigung)
+✅ **Datenverarbeitung mit benutzerdefinierten Funktionen** (`processing.py`)
+✅ **RESTful API zur Bereitstellung der Daten** (mit detaillierten Fehlermeldungen)
+✅ **Automatisierte Task-Planung aus der Datenbank** (mit Monitoring & manueller Ausführung über die API)
+✅ **API-Authentifizierung per API-Key** 🔑
+✅ **Ratenbegrenzung zum Schutz vor Missbrauch** 🛡️
+✅ **Caching zur Leistungssteigerung** ⚡
+✅ **Datenbankintegration mit SQLite** 🗄️ (mit Transaktionssicherheit)
+✅ **Erweiterbare Sicherheitsmaßnahmen gegen Path Traversal & CSS-Injection**
+✅ **Monitoring für geplante Tasks und API-Status über API-Endpunkte** 📊 (inkl. Start-/Endzeiten, Logs, Fehlerberichte, letzter/nächster Ausführungszeit)
+✅ **Einfache Konfiguration über YAML-Dateien & Umgebungsvariablen** ⚙️
 
+📖 Diese Dokumentation beschreibt die **Installation, Konfiguration und Nutzung** des Programms.
 
-## Voraussetzungen
+---
 
-* **Python:** 3.7 oder höher (empfohlen: 3.9+).
-* **pip:** Python-Paketmanager.
-* **Chrome:** Google Chrome-Browser und ein kompatibler ChromeDriver.
-* **NLTK Data:** `stopwords` für die Keyword-Extraktion (`nltk.download('stopwords')`).
-* **Notwendige Python-Pakete:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    Die `requirements.txt` sollte folgende Pakete enthalten:
-    ```
-    beautifulsoup4
-    flask
-    nltk
-    requests
-    selenium
-    webdriver-manager
-    pyyaml
-    python-dotenv
-    pydantic
-    schedule
-    ```
+## 🔧 **1. Installation**
+### 📂 **1.1 Voraussetzungen**
+📌 **Erforderliche Software:**
+- 🐍 **Python 3.7 oder höher** *(empfohlen: 3.9+)*
+- 📦 **pip** *(Python-Paketmanager, sollte mit Python installiert sein)*
+- 🌐 **Google Chrome + ChromeDriver** *(für Selenium-basiertes Scraping)*
+- 🧠 **NLTK Data:** *(Für Keyword-Extraktion: `python -m nltk.downloader stopwords`)*
 
+### 📥 **1.2 Abhängigkeiten installieren**
+Führe folgenden Befehl aus, um alle benötigten Pakete zu installieren:
+```bash
+pip install -r requirements.txt
+```
 
-## Installation
+---
 
-1. **Klonen des Repository (Optional):**
-   ```bash
-   git clone <Repository-URL>
-   cd <Repository-Verzeichnis>
-   ```
+## ⚙️ **2. Konfiguration**
+Das Programm wird über **YAML-Dateien & Umgebungsvariablen** konfiguriert:
+- 📄 **`config.yaml`** → Enthält Einstellungen für Scraping, API, Datenbank & Sicherheit.
+- 🔑 **`.env` Datei** → Speichert API-Keys & andere sensible Informationen. *(Umgebungsvariablen haben Vorrang vor `config.yaml`.)*  API-Keys können auch direkt in `config.yaml` unter `api_keys` eingetragen werden.
 
-2. **Virtuelle Umgebung (Empfohlen):**
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate  # Linux/macOS
-   .venv\Scripts\activate     # Windows
-   ```
+### 🛠 **2.1 `config.yaml` (Beispiel)**
+```yaml
+scraping:
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+  timeout: 10
 
-3. **Abhängigkeiten installieren:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+database:
+  type: sqlite
+  path: "data/webcrawler.db"
 
-## Konfiguration
+security:
+  api_key_required: true
+  rate_limit: 100
+```
 
-* **`config.yaml`:**  Die meisten Einstellungen werden hier konfiguriert. Siehe die mitgelieferte `config.yaml` als Vorlage. Wichtige Konfigurationsparameter sind:
-    * `database_file`: Pfad zur SQLite-Datenbankdatei.
-    * `schedule_config_file`: Pfad zur JSON-Datei mit den geplanten Tasks (wird nicht mehr direkt verwendet, sondern die Tasks werden in der Datenbank gespeichert).
-    * `api_keys`: Liste der API-Keys für die API-Authentifizierung.
-    * `processing_functions_dir`:  Verzeichnis, in dem sich benutzerdefinierte Verarbeitungsfunktionen befinden.
-* **`.env`:** Für sensible Daten wie API-Keys.  Umgebungsvariablen überschreiben die YAML-Konfiguration.  Beispiel:
-    ```
-    API_KEY_1=<your_api_key_1>
-    API_KEY_2=<your_api_key_2>
-    API_KEY_3=<your_api_key_3>
-    ```
+### 🔑 **2.2 `.env` Datei (Beispiel)**
+```ini
+API_KEY_1=mein_geheimer_api_key_1
+API_KEY_2=mein_geheimer_api_key_2
+API_KEY_3=mein_geheimer_api_key_3
+```
 
-## Ausführung
+---
 
-### API-Modus:
-
+## ▶️ **3. Nutzung**
+### 🌍 **3.1 API-Modus** *(Startet den API-Server)*
 ```bash
 python app.py --api
 ```
 
-### Kommandozeilenmodus (einmalige Ausführung):
-
+### 🕵️ **3.2 Kommandozeilenmodus** *(Einzelnes Scraping ausführen)*
 ```bash
-python app.py <URL> [Optionen]
+python app.py https://example.com [Optionen]
 ```
 
-**Optionen:**
+### ⏳ **3.3 Geplanter Modus** *(Automatische Tasks aus der Datenbank ausführen)*
+```bash
+python app.py
+```
+📌 **Hinweis:** Geplante Tasks werden aus der Datenbank (`webdata.db`, konfigurierbar in `config.yaml`) geladen und ausgeführt. 
+---
 
-* `--text`: Nur Textinhalt extrahieren.
-* `--save-file`: Inhalt in einer Datei speichern.
-* `--stopwords "<kommagetrennte_stopwörter>"`: Zusätzliche Stopwörter für die Keyword-Extraktion.
-* `--css-selectors "<JSON_mit_CSS_Selektoren>"`:  CSS-Selektoren für die Datenextraktion.
-* `--processing-function <pfad_zur_python_datei>`: Pfad zu einer Python-Datei mit der Verarbeitungsfunktion `process_data(data)`.
+
+## 🛠 **4. Benutzerdefinierte Datenverarbeitung (`processing.py`)**
+📌 **Ermöglicht benutzerdefinierte Verarbeitung gescrapter Daten.**
 
 **Beispiel:**
-
-```bash
-python app.py https://www.example.com --text --save-file --stopwords "und,die,der" --css-selectors '{"title": "title", "headings": "h1"}' --processing-function meine_verarbeitung.py
-```
-
-### Geplanter Modus:
-
-```bash
-python app.py 
-```
-Dieser Modus lädt geplante Tasks aus der Datenbank und führt sie nach dem definierten Zeitplan aus.
-
-
-## API-Endpunkte
-
-Alle API-Endpunkte erfordern einen gültigen API-Key im `X-API-Key` Header.  Die Ratenbegrenzung ist aktiv.
-
-* `/api/v1/`:  API-Root mit Beschreibung aller Endpunkte.
-* `/api/v1/fetch-html`:  HTML-Inhalt abrufen. Parameter: `url`, `stopwords`, `css-selectors`, `save-file`, `processing-function-path`.
-* `/api/v1/fetch-text`: Textinhalt abrufen. Parameter:  `url`, `stopwords`, `css-selectors`, `save-file`, `processing-function-path`.
-* `/api/v1/scheduled-tasks`:  Geplante Tasks verwalten (GET, POST, PUT, DELETE).
-* `/api/v1/scheduled-tasks/<task_id>`:  Spezifischen Task verwalten (GET, PUT, DELETE).
-* `/api/v1/scheduled-tasks/status`: Status aller geplanten Tasks abrufen.
-* `/api/v1/scheduled-tasks/<task_id>/status`:  Status eines spezifischen Tasks abrufen.
-* `/api/v1/scheduled-tasks/<task_id>/run`: Manuelles Ausführen eines geplanten Tasks.
-* `/api/v1/health`: Health-Check der API.
-
-## Benutzerdefinierte Datenverarbeitung (`processing.py`)
-
-Erstelle eine Python-Datei (z.B. `meine_verarbeitung.py`) im konfigurierten `processing_functions_dir`.  Die Datei muss eine Funktion namens `process_data(data)` enthalten. Diese Funktion empfängt ein Dictionary mit den extrahierten Daten und gibt die verarbeiteten Daten als Dictionary oder serialisierbares Objekt zurück.
-
-**Beispiel `meine_verarbeitung.py`:**
-
 ```python
-import json
-
-def process_data(data):
+def process_data(data: dict) -> dict:
     """
-    Beispielfunktion zur Datenverarbeitung.
-    Extrahiert die Anzahl der Wörter im Titel und gibt sie zusammen mit dem Titel zurück.
+    Verarbeitet gescrapte Daten. Muss ein Dictionary zurückgeben.
+    Falls `None` zurückgegeben wird, erscheint eine Warnung im Log.
     """
-    title = data.get("title")
-    if title:
-        word_count = len(title.split())
-        return {"title": title, "title_word_count": word_count}
-    return None  # oder {} oder eine andere sinnvolle Rückgabe
+    if not isinstance(data, dict):
+        return None
+
+    processed_data = {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}
+    return processed_data
 ```
 
-## CSS-Selektoren
+---
 
-CSS-Selektoren ermöglichen die gezielte Extraktion von Daten. **Sicherheitshinweis:** Stellen Sie sicher, dass die CSS-Selektoren keine Sicherheitslücken öffnen.  Verwenden Sie die Funktion `is_safe_css_selector()` zur Überprüfung.  Ungültige oder unsichere Selektoren werden ignoriert.
+## 🔒 **5. Sicherheitshinweise**
+📌 **Schutzmechanismen:**
+- 🔑 **API-Key-Authentifizierung** *(API-Endpunkte erfordern einen API-Key im Header)*
+- 🛡 **Ratenbegrenzung** *(Maximal 100 Anfragen pro Minute, konfigurierbar in `config.yaml`)*
+- 🚨 **Path Traversal-Schutz** *(Verhindert unautorisierten Zugriff auf Dateien)*
+- 🔍 **CSS-Selektor-Validierung** *(Unsichere Selektoren werden ignoriert & protokolliert)*
 
-**Beispiel für gültige CSS-Selektoren im JSON-Format:**
-
-```json
-{
-  "title": {"selector": "title", "type": "string"},
-  "h1": {"selector": "h1", "type": "string"},
-  "preise": {"selector": ".preis", "type": "float", "cleanup": ["lower"]}
-}
+**Beispiel für ein Sicherheitslog:**
+```sh
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onclick*=alert]
 ```
 
-## Testen
+---
 
-Unit-Tests befinden sich im Verzeichnis `tests`.  Ausführen mit:
+## 📊 **6. Fehlerbehandlung & Logging**
+📌 **Wo werden Fehler protokolliert?**
+- 🖥 **Konsolenausgabe** *(Standard, für schnelle Fehleranalyse)*
+- 🗂 **Log-Datei `logs/webcrawler.log`** *(falls aktiviert)*
 
-```bash
-python -m unittest discover tests
-```
-
-## Sicherheit
-
-* **API-Key Authentifizierung.**
-* **Ratenbegrenzung.**
-* **Path Traversal Schutz.**
-* **CSS Injection Schutz.**
-* **Whitelist für Verarbeitungsfunktionen.**
-* **Sichere URL-Validierung:**  Es wird eine verbesserte URL-Validierung verwendet, um ungültige oder potenziell schädliche URLs zu erkennen.
+**Log-Level:**
+- ✅ **INFO** → Allgemeine Statusmeldungen
+- ⚠️ **WARNING** → Sicherheitswarnungen
+- ❌ **ERROR** → Kritische Fehler
 
 
-## Monitoring
-
-Über die API-Endpunkte `/api/v1/scheduled-tasks/status` und `/api/v1/scheduled-tasks/<task_id>/status` kann der Status der geplanten Tasks überwacht werden.  Es werden detaillierte Informationen wie Start-/Endzeiten, letzte und nächste Ausführungszeit sowie etwaige Fehlermeldungen angezeigt.
-
-
-## Fehlerbehandlung
-
-Fehler werden protokolliert.  Das Log-Level kann in der `config.yaml` konfiguriert werden.
-
-
-
-## Beitrag leisten
-
-Beiträge sind willkommen!  Bitte erstellen Sie ein Issue oder einen Pull Request.
+## 📡 7. API-Endpunkte
+📌 **Übersicht der wichtigsten API-Endpunkte (aktualisiert):**
+- 🌐 `/api/v1/` → API Root mit Übersicht aller Endpunkte
+- 📄 `/api/v1/fetch-html` → HTML-Inhalt abrufen (Parameter: `url`, `stopwords`, `css-selectors`, `save_file`, `processing_function_path`)
+- 📄 `/api/v1/fetch-text` → Textinhalt abrufen (Parameter: `url`, `stopwords`, `css-selectors`, `save_file`, `processing_function_path`)
+- 🔄 `/api/v1/scheduled-tasks` → Aufgabenverwaltung (GET, POST, PUT, DELETE)
+- 🔄 `/api/v1/scheduled-tasks/<task_id>` → Einzelne Task verwalten (GET, PUT, DELETE)
+- 📊 `/api/v1/scheduled-tasks/status` → Status aller geplanten Tasks
+- 📊 `/api/v1/scheduled-tasks/<task_id>/status` → Status eines spezifischen Tasks  (inkl. letzter/nächster Ausführungszeit und Fehlermeldungen)
+- 📊 `/api/v1/scheduled-tasks/<task_id>/run` → Manuelles Ausführen eines Tasks
+- ✅ `/api/v1/health` → API Health Check
 
 
-## Kontakt
+🔐 **Alle API-Endpunkte erfordern API-Authentifizierung!**
 
-ralf.kruemmel+python@outlook.de
+---
+
+## 🏁 **8. Fazit**
+✅ **Automatisierte Task-Planung direkt aus der Datenbank**
+✅ **Erweiterbare Datenverarbeitung durch `processing.py`**
+✅ **Detaillierte Logging- & Sicherheitsmaßnahmen**
+✅ **Einfache Konfiguration über `config.yaml` & `.env`**
+
+🚀 **WebCrawler-Pro ist die ideale Lösung für produktives, sicheres und flexibles Web-Scraping!**
 
