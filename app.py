@@ -1,3 +1,4 @@
+import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import argparse
@@ -15,25 +16,24 @@ import json
 from collections import Counter
 import nltk
 from nltk.corpus import stopwords
-import time  # Für Wiederholungsversuche und Backoff
-import schedule # Für zeitgesteuerte Aufgaben
-import uuid # Für eindeutige Task-IDs
-import importlib.util # Für dynamisches Laden von Modulen
-import re # Für URL-Validierung
-import yaml # PyYAML für YAML-Konfiguration
+import time
+import schedule
+import uuid
+import importlib.util
+import re
+import yaml
 from pydantic import BaseModel, field_validator, ValidationError, HttpUrl, model_validator
 from typing import List, Optional, Dict, Any
-from functools import wraps # Für Decorator-Metadaten
-import threading # Für Multithreading im Scheduled Mode
-from dotenv import load_dotenv # dotenv importieren
+from functools import wraps
+import threading
+from dotenv import load_dotenv
 
-load_dotenv() # .env Datei laden, falls vorhanden
+load_dotenv()
 
-IS_SCHEDULED_MODE = False # Globale Variable, um Scheduled Mode zu erkennen
+IS_SCHEDULED_MODE = False
 
-# Konfiguration laden aus YAML-Datei
 CONFIG_FILE = 'config.yaml'
-DEFAULT_CONFIG = { # Default-Werte, falls config.yaml nicht vorhanden oder unvollständig
+DEFAULT_CONFIG = {
     'database_file': 'webdata.db',
     'schedule_config_file': 'scheduled_tasks.json',
     'max_retries': 3,
@@ -42,12 +42,12 @@ DEFAULT_CONFIG = { # Default-Werte, falls config.yaml nicht vorhanden oder unvol
     'processing_functions_dir': '.',
     'log_level': 'INFO',
     'api_debug_mode': True,
-    'api_keys': [], # Default API Keys ist eine leere Liste, da sie aus .env oder YAML geladen werden sollen
-    'rate_limit_enabled': True, # Rate Limiting standardmäßig aktiviert
-    'rate_limit_requests_per_minute': 20, # Standardmäßig 20 Anfragen pro Minute
-    'cache_enabled': True, # Caching standardmäßig aktiviert
-    'cache_expiry_seconds': 600, # Cache-Gültigkeit standardmäßig 10 Minuten (600 Sekunden)
-    'selenium_config': { # Default Selenium Konfiguration
+    'api_keys': [],
+    'rate_limit_enabled': True,
+    'rate_limit_requests_per_minute': 20,
+    'cache_enabled': True,
+    'cache_expiry_seconds': 600,
+    'selenium_config': {
         'headless': True,
         'disable_gpu': True,
         'disable_extensions': True,
@@ -55,26 +55,24 @@ DEFAULT_CONFIG = { # Default-Werte, falls config.yaml nicht vorhanden oder unvol
         'disable_dev_shm_usage': True,
         'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     },
-    'allowed_css_properties': [ # Default Whitelist für erlaubte CSS-Eigenschaften
+    'allowed_css_properties': [
         'color', 'font-size', 'background-color', 'margin', 'padding',
         'text-align', 'font-weight', 'text-decoration', 'font-family',
         'border', 'border-radius', 'width', 'height', 'display', 'visibility',
-        'opacity', 'cursor', 'list-style-type', 'vertical-align' # Beispiele, erweiterbar
+        'opacity', 'cursor', 'list-style-type', 'vertical-align'
     ]
 }
 
 def load_config():
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as file:
-            config = yaml.safe_load(file) or {}  # Falls Datei leer, leere Dict zurückgeben
+            config = yaml.safe_load(file) or {}
     except FileNotFoundError:
         logging.warning(f"Konfigurationsdatei '{CONFIG_FILE}' nicht gefunden. Verwende Standardkonfiguration.")
         config = {}
 
-    # Mergen mit Standardwerten
     merged_config = {**DEFAULT_CONFIG, **config}
 
-    # API Keys laden
     api_keys_env = [os.getenv(f'API_KEY_{i+1}') for i in range(3) if os.getenv(f'API_KEY_{i+1}')]
     api_keys_yaml = config.get('api_keys', [])
     merged_config['api_keys'] = set(api_keys_env) | set(api_keys_yaml)
@@ -82,43 +80,37 @@ def load_config():
     if not merged_config['api_keys']:
         logging.warning("Keine API-Keys konfiguriert. API-Key-Authentifizierung wird nicht funktionieren.")
 
-    # Selenium Konfiguration mergen
     merged_config['selenium_config'] = {**DEFAULT_CONFIG['selenium_config'], **config.get('selenium_config', {})}
     merged_config['allowed_css_properties'] = config.get('allowed_css_properties', DEFAULT_CONFIG['allowed_css_properties'])
 
     return merged_config
 
-config = load_config() # Konfiguration beim Start laden
+config = load_config()
 
-# Konfiguration aus der geladenen Konfiguration verwenden
 DATABASE_FILE = config['database_file']
-SCHEDULE_CONFIG_FILE = config['schedule_config_file'] # Nicht mehr verwendet, aber Konfigurationsvariable beibehalten
+SCHEDULE_CONFIG_FILE = config['schedule_config_file']
 MAX_RETRIES = config['max_retries']
 RETRY_DELAY = config['retry_delay']
 ALLOWED_PROCESSING_FUNCTION_NAME = config['allowed_processing_function_name']
 PROCESSING_FUNCTIONS_DIR = config['processing_functions_dir']
-LOG_LEVEL_STR = config['log_level'] # Log Level aus Config
-API_DEBUG_MODE = config['api_debug_mode'] # API Debug Mode aus Config
-API_KEYS = set(config['api_keys']) # API Keys aus Config, als Set für schnellen Lookup
-RATE_LIMIT_ENABLED = config['rate_limit_enabled'] # Rate Limiting aktivieren/deaktivieren
-RATE_LIMIT_REQUESTS_PER_MINUTE = config['rate_limit_requests_per_minute'] # Anfragen pro Minute
-CACHE_ENABLED = config['cache_enabled'] # Caching aktivieren/deaktivieren
-CACHE_EXPIRY_SECONDS = config['cache_expiry_seconds'] # Cache-Gültigkeit in Sekunden
+LOG_LEVEL_STR = config['log_level']
+API_DEBUG_MODE = config['api_debug_mode']
+API_KEYS = set(config['api_keys'])
+RATE_LIMIT_ENABLED = config['rate_limit_enabled']
+RATE_LIMIT_REQUESTS_PER_MINUTE = config['rate_limit_requests_per_minute']
+CACHE_ENABLED = config['cache_enabled']
+CACHE_EXPIRY_SECONDS = config['cache_expiry_seconds']
 
-ALLOWED_CSS_PROPERTIES = config['allowed_css_properties'] # Whitelist für erlaubte CSS-Eigenschaften aus Config laden
+ALLOWED_CSS_PROPERTIES = config['allowed_css_properties']
 
-# Logging Level konfigurieren (basierend auf Konfiguration)
-log_level = getattr(logging, LOG_LEVEL_STR.upper(), logging.INFO) # Fallback auf INFO, falls ungültiger Level
+log_level = getattr(logging, LOG_LEVEL_STR.upper(), logging.INFO)
 logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
-app.debug = API_DEBUG_MODE # Debug-Modus für Flask App konfigurieren
+app.debug = API_DEBUG_MODE
 
-# --- Caching (unverändert) ---
+page_cache = {}
 
-page_cache = {} # In-Memory Cache für Webseiteninhalte {url: {content: ..., timestamp: ...}}
-
-# Funktion zum Validieren von JSON
 def validate_json(json_string):
     try:
         return json.loads(json_string)
@@ -126,21 +118,16 @@ def validate_json(json_string):
         logging.error(f"Ungültiges JSON: {json_string}")
         return None
 
-
 def extract_domain(url):
-    """Extrahiert den Domainnamen aus einer URL."""
     try:
         parsed_url = urlparse(url)
         return parsed_url.netloc
-    except:  # Fange alle Fehler beim Parsen der URL ab
+    except:
         logging.error(f"Fehler beim Extrahieren des Domainnamens aus {url}")
         return None
 
 def get_cached_content(url):
-    """
-    Gibt gecachten Inhalt zurück, falls vorhanden und gültig.
-    """
-    if not CACHE_ENABLED: # Caching global deaktiviert
+    if not CACHE_ENABLED:
         return None
     if url in page_cache:
         cache_entry = page_cache[url]
@@ -149,29 +136,21 @@ def get_cached_content(url):
             return cache_entry['content']
         else:
             logging.debug(f"Cache abgelaufen für URL: {url}")
-            del page_cache[url] # Veralteten Cache-Eintrag entfernen
+            del page_cache[url]
     return None
 
 def set_cached_content(url, content):
-    """
-    Speichert Inhalt im Cache.
-    """
-    if CACHE_ENABLED: # Nur cachen, wenn Caching global aktiviert ist
+    if CACHE_ENABLED:
         page_cache[url] = {'content': content, 'timestamp': datetime.datetime.now()}
         logging.debug(f"Inhalt für URL: {url} im Cache gespeichert.")
 
-# --- API Authentifizierung und Rate Limiting (unverändert) ---
-
 def validate_api_key(api_key):
-    """Validiert den API-Key gegen eine Liste gültiger Keys."""
     return api_key in API_KEYS
 
-# Rate Limiting State (in-memory, einfach)
-request_counts = {} # {api_key: {timestamp: count}}
+request_counts = {}
 
 def is_rate_limited(api_key):
-    """Überprüft, ob das Rate Limit für einen API-Key überschritten ist."""
-    if not RATE_LIMIT_ENABLED: # Rate Limiting global deaktiviert
+    if not RATE_LIMIT_ENABLED:
         return False
 
     now = datetime.datetime.now()
@@ -180,28 +159,26 @@ def is_rate_limited(api_key):
     if api_key not in request_counts:
         request_counts[api_key] = []
 
-    # Bereinige alte Einträge
     request_counts[api_key] = [ts for ts in request_counts[api_key] if ts > minute_ago]
 
     if len(request_counts[api_key]) >= RATE_LIMIT_REQUESTS_PER_MINUTE:
-        return True # Rate Limit überschritten
+        return True
     return False
 
 def require_api_key(f):
-    """Decorator zur Sicherung von API-Endpunkten mit API-Key-Authentifizierung und Rate Limiting."""
-    @wraps(f) # Funktion wrappern, um Metadaten zu erhalten
+    @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key') # API-Key aus Header extrahieren
+        api_key = request.headers.get('X-API-Key')
         if not api_key or not validate_api_key(api_key):
-            logging.warning(f"Ungültiger oder fehlender API-Key von IP: {request.remote_addr}") # Log ungültiger API-Key-Versuche
-            return create_api_response(errors=["API-Key fehlt oder ist ungültig."], message="API-Key ist erforderlich.", status_code=401) # 401 Unauthorized
+            logging.warning(f"Ungültiger oder fehlender API-Key von IP: {request.remote_addr}")
+            return create_api_response(errors=["API-Key fehlt oder ist ungültig."], message="API-Key ist erforderlich.", status_code=401)
 
-        if RATE_LIMIT_ENABLED and is_rate_limited(api_key): # Rate Limit Prüfung
-            logging.warning(f"Rate Limit überschritten für API-Key '{api_key}' von IP: {request.remote_addr}") # Log Rate Limiting
-            return create_api_response(errors=["Rate Limit überschritten. Bitte warten Sie eine Minute."], message="Zu viele Anfragen in kurzer Zeit.", status_code=429) # 429 Too Many Requests
+        if RATE_LIMIT_ENABLED and is_rate_limited(api_key):
+            logging.warning(f"Rate Limit überschritten für API-Key '{api_key}' von IP: {request.remote_addr}")
+            return create_api_response(errors=["Rate Limit überschritten. Bitte warten Sie eine Minute."], message="Zu viele Anfragen in kurzer Zeit.", status_code=429)
 
         if RATE_LIMIT_ENABLED:
-            request_counts[api_key].append(datetime.datetime.now()) # Zähle Anfrage nur, wenn API-Key gültig und Rate Limit nicht überschritten
+            request_counts[api_key].append(datetime.datetime.now())
 
         return f(*args, **kwargs)
     return decorated_function
@@ -254,10 +231,7 @@ class ScheduledTaskUpdatePayload(BaseModel):
             raise ValueError("Mindestens ein Feld zum Aktualisieren erforderlich.")
         return data
 
-# --- Datenbank- und Konfigurationsfunktionen (angepasst für Transaktionen und Fehlerbehandlung) ---
-
 def init_db():
-    """Initialisiert die Datenbank und erstellt die Tabelle 'scheduled_tasks', falls sie nicht existiert."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
@@ -272,28 +246,27 @@ def init_db():
                 css_selectors TEXT,
                 save_file INTEGER,
                 processing_function_path TEXT,
-                status TEXT,  -- Status des Tasks
-                start_time TEXT, -- Startzeitpunkt des Tasks
-                end_time TEXT,   -- Endzeitpunkt des Tasks
-                last_run_time TEXT, -- Letzte Ausführungszeit (neu für Monitoring)
-                next_run_time TEXT, -- Nächste geplante Ausführungszeit (neu für Monitoring)
-                error_message TEXT -- Fehlermeldung (neu für Monitoring)
+                status TEXT,
+                start_time TEXT,
+                end_time TEXT,
+                last_run_time TEXT,
+                next_run_time TEXT,
+                error_message TEXT
             )
         """)
         conn.commit()
         logging.info("Datenbank initialisiert oder Tabelle 'scheduled_tasks' gefunden.")
     except sqlite3.Error as e:
         logging.error(f"Kritischer Fehler bei der Datenbankinitialisierung: {e}. Programm wird beendet.", exc_info=True)
-        if conn: # Versuche zu schließen, auch wenn Fehler aufgetreten sind
+        if conn:
             conn.close()
-        exit(1) # Beende das Programm bei kritischem Datenbankfehler
+        exit(1)
     finally:
         if conn:
             conn.close()
 
 def save_scheduled_task_to_db(task_data):
-    """Speichert einen geplanten Task in der Datenbank mit Transaktionssicherheit."""
-    conn = None # Conn außerhalb des try-Blocks definieren für finally-Block
+    conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
@@ -302,13 +275,13 @@ def save_scheduled_task_to_db(task_data):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (task_data['id'], task_data['url'], task_data['schedule_time'],
               task_data.get('text_only', False), task_data.get('stopwords'), task_data.get('css_selectors'),
-              task_data.get('save_file', False), task_data.get('processing_function_path'), 'pending', task_data.get('next_run_time'))) # Initialstatus 'pending', next_run_time hinzufügen
-        conn.commit() # Explizites Commit innerhalb der Transaktion
+              task_data.get('save_file', False), task_data.get('processing_function_path'), 'pending', task_data.get('next_run_time')))
+        conn.commit()
         logging.info(f"Geplanter Task '{task_data['id']}' für URL '{task_data['url']}' in Datenbank gespeichert.")
         return True
     except sqlite3.Error as e:
         if conn:
-            conn.rollback() # Rollback bei Fehler
+            conn.rollback()
         logging.error(f"Fehler beim Speichern des geplanten Tasks in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
@@ -316,17 +289,16 @@ def save_scheduled_task_to_db(task_data):
             conn.close()
 
 def load_scheduled_tasks():
-    """Lädt alle geplanten Tasks aus der Datenbank."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM scheduled_tasks")
         tasks = cursor.fetchall()
-        column_names = [column[0] for column in cursor.description] # Spaltennamen abrufen
+        column_names = [column[0] for column in cursor.description]
         task_list = []
         for task_tuple in tasks:
-            task_dict = dict(zip(column_names, task_tuple)) # Dictionary aus Spaltennamen und Werten erstellen
+            task_dict = dict(zip(column_names, task_tuple))
             task_list.append(task_dict)
         logging.info(f"{len(task_list)} geplante Tasks aus der Datenbank geladen.")
         return task_list
@@ -338,7 +310,6 @@ def load_scheduled_tasks():
             conn.close()
 
 def get_scheduled_task_from_db(task_id):
-    """Ruft einen spezifischen geplanten Task anhand seiner ID aus der Datenbank ab."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
@@ -349,7 +320,7 @@ def get_scheduled_task_from_db(task_id):
             column_names = [column[0] for column in cursor.description]
             task_dict = dict(zip(column_names, task_data))
             return task_dict
-        return None # Task nicht gefunden
+        return None
     except sqlite3.Error as e:
         logging.error(f"Fehler beim Abrufen des geplanten Tasks '{task_id}' aus der Datenbank: {e}", exc_info=True)
         return None
@@ -358,7 +329,6 @@ def get_scheduled_task_from_db(task_id):
             conn.close()
 
 def update_scheduled_task_in_db(task_id, task_data):
-    """Aktualisiert einen bestehenden geplanten Task in der Datenbank mit Transaktionssicherheit."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
@@ -367,27 +337,27 @@ def update_scheduled_task_in_db(task_id, task_data):
         set_clauses = []
         query_params = []
         for key, value in task_data.items():
-            if key not in ['id', 'status', 'start_time', 'end_time', 'last_run_time', 'next_run_time', 'error_message']: # 'id', Status-Felder nicht aktualisierbar über PUT/Update API
+            if key not in ['id', 'status', 'start_time', 'end_time', 'last_run_time', 'next_run_time', 'error_message']:
                 set_clauses.append(f"{key} = ?")
                 query_params.append(value)
-        query_params.append(task_id) # task_id zum WHERE-Clause hinzufügen
+        query_params.append(task_id)
 
-        if not set_clauses: # Keine Felder zum Updaten?
+        if not set_clauses:
             logging.warning(f"Keine aktualisierbaren Felder im Update-Request für Task '{task_id}' gefunden.")
-            return True # Erfolgreich, da nichts zu tun war
+            return True
 
         sql_query = f"UPDATE scheduled_tasks SET {', '.join(set_clauses)} WHERE id = ?"
         cursor.execute(sql_query, query_params)
-        conn.commit() # Explizites Commit innerhalb der Transaktion
+        conn.commit()
         if cursor.rowcount > 0:
             logging.info(f"Geplanter Task '{task_id}' in Datenbank aktualisiert.")
             return True
         else:
             logging.warning(f"Kein Task mit ID '{task_id}' zum Aktualisieren gefunden.")
-            return False # Kein Task gefunden oder kein Update durchgeführt
+            return False
     except sqlite3.Error as e:
         if conn:
-            conn.rollback() # Rollback bei Fehler
+            conn.rollback()
         logging.error(f"Fehler beim Aktualisieren des geplanten Tasks '{task_id}' in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
@@ -395,66 +365,63 @@ def update_scheduled_task_in_db(task_id, task_data):
             conn.close()
 
 def delete_scheduled_task_from_db(task_id):
-    """Löscht einen geplanten Task anhand seiner ID aus der Datenbank mit Transaktionssicherheit."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM scheduled_tasks WHERE id = ?", (task_id,))
-        conn.commit() # Explizites Commit innerhalb der Transaktion
+        conn.commit()
         if cursor.rowcount > 0:
             logging.info(f"Geplanter Task '{task_id}' erfolgreich aus Datenbank gelöscht.")
             return True
         else:
             logging.warning(f"Kein Task mit ID '{task_id}' zum Löschen gefunden.")
-            return False # Kein Task gefunden oder kein Löschen durchgeführt
+            return False
     except sqlite3.Error as e:
         if conn:
-            conn.rollback() # Rollback bei Fehler
+            conn.rollback()
         logging.error(f"Fehler beim Löschen des geplanten Tasks '{task_id}' aus der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
         if conn:
             conn.close()
 
-def update_scheduled_task_status_db(task_id, start_time, status, error_message=None, next_run_time=None): # error_message und next_run_time hinzugefügt
-    """Aktualisiert den Status eines geplanten Tasks in der Datenbank mit Transaktionssicherheit."""
+def update_scheduled_task_status_db(task_id, start_time, status, error_message=None, next_run_time=None):
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
-        end_time_str = datetime.datetime.now().isoformat() # Endzeitpunkt beim Status-Update erfassen
-        last_run_time_str = datetime.datetime.now().isoformat() # Letzte Laufzeit aktualisieren
+        end_time_str = datetime.datetime.now().isoformat()
+        last_run_time_str = datetime.datetime.now().isoformat()
         cursor.execute("""
             UPDATE scheduled_tasks
             SET status = ?, start_time = ?, end_time = ?, last_run_time = ?, next_run_time = ?, error_message = ?
             WHERE id = ?
-        """, (status, start_time.isoformat(), end_time_str, last_run_time_str, next_run_time, error_message, task_id)) # last_run_time, next_run_time und error_message speichern
-        conn.commit() # Explizites Commit innerhalb der Transaktion
+        """, (status, start_time.isoformat(), end_time_str, last_run_time_str, next_run_time, error_message, task_id))
+        conn.commit()
         logging.info(f"Status für Task '{task_id}' in Datenbank aktualisiert zu '{status}'.")
         return True
     except sqlite3.Error as e:
         if conn:
-            conn.rollback() # Rollback bei Fehler
+            conn.rollback()
         logging.error(f"Fehler beim Aktualisieren des Status für Task '{task_id}' in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
         if conn:
             conn.close()
 
-def update_scheduled_task_running_status_db(task_id, status): # Umbenannt und vereinfacht für Status-Updates während der Laufzeit
-    """Aktualisiert den Status eines geplanten Tasks in der Datenbank (vereinfachte Version) mit Transaktionssicherheit."""
+def update_scheduled_task_running_status_db(task_id, status):
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         cursor.execute("UPDATE scheduled_tasks SET status = ? WHERE id = ?", (status, task_id))
-        conn.commit() # Explizites Commit innerhalb der Transaktion
+        conn.commit()
         logging.info(f"Status für Task '{task_id}' in Datenbank aktualisiert zu '{status}'.")
         return True
     except sqlite3.Error as e:
         if conn:
-            conn.rollback() # Rollback bei Fehler
+            conn.rollback()
         logging.error(f"Fehler beim Aktualisieren des Status für Task '{task_id}' in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
@@ -462,7 +429,6 @@ def update_scheduled_task_running_status_db(task_id, status): # Umbenannt und ve
             conn.close()
 
 def save_to_db(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, processed_content):
-    """Speichert die extrahierten Daten in der Datenbank mit Transaktionssicherheit."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
@@ -482,47 +448,33 @@ def save_to_db(url, domain_name, title, meta_description, h1_headings, keywords,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        h1_headings_json = json.dumps(h1_headings, ensure_ascii=False) if h1_headings else None # JSON-Serialisierung für Listen
-        keywords_json = json.dumps(keywords, ensure_ascii=False) if keywords else None # JSON-Serialisierung für Listen
+        h1_headings_json = json.dumps(h1_headings, ensure_ascii=False) if h1_headings else None
+        keywords_json = json.dumps(keywords, ensure_ascii=False) if keywords else None
         cursor.execute("""
             INSERT OR REPLACE INTO web_content (domain, url, title, meta_description, h1_headings, keywords, html_content, text_content, processed_content)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (domain_name, url, title, meta_description, h1_headings_json, keywords_json, webpage_content, text_content, processed_content))
-        conn.commit() # Explizites Commit innerhalb der Transaktion
+        conn.commit()
         return True
     except sqlite3.Error as e:
         if conn:
-            conn.rollback() # Rollback bei Fehler
+            conn.rollback()
         logging.error(f"Datenbankfehler beim Speichern von Daten für URL '{url}' (Rollback durchgeführt): {e}", exc_info=True)
-        if IS_SCHEDULED_MODE: # Programm beenden im Scheduled Mode bei DB-Fehler
-            logging.critical("Kritischer Datenbankfehler im Scheduled Mode. Programm wird beendet.", exc_info=True) # CRITICAL Log
+        if IS_SCHEDULED_MODE:
+            logging.critical("Kritischer Datenbankfehler im Scheduled Mode. Programm wird beendet.", exc_info=True)
             exit(1)
         return False
     finally:
         if conn:
             conn.close()
 
-# --- Web Scraping Funktionen (Caching und verbesserte URL-Validierung) ---
-
-
 def extract_domain(url: str) -> Optional[str]:
-    """
-    Extrahiert die Domain (netloc) aus einer vollständigen URL.
-    Zuerst wird die URL auf Gültigkeit geprüft. Falls ungültig, wird None zurückgegeben.
-    """
     if not is_valid_url(url):
         return None
     parsed_url = urlparse(url)
     return parsed_url.netloc
 
-
 def is_valid_url(url: str) -> bool:
-    """
-    Überprüft, ob eine URL gültig ist.
-    Die Funktion stellt sicher, dass das Schema (http/https) vorhanden ist und dass
-    der Domain-Teil (netloc) einer erweiterten Regex entspricht. Dadurch werden auch
-    Domains wie "https://-test.com" korrekt als ungültig erkannt.
-    """
     if not url:
         return False
     url = url.strip()
@@ -533,7 +485,6 @@ def is_valid_url(url: str) -> bool:
     parsed_url = urlparse(url)
     if not parsed_url.netloc:
         return False
-    # Regex zur Validierung der Domain: Keine Labels, die mit einem Bindestrich beginnen oder enden.
     if not re.match(r"^(?!-)(?:[A-Za-z0-9-]{1,63}(?<!-)\.)+[A-Za-z]{2,}$", parsed_url.netloc):
         return False
     if parsed_url.netloc.startswith(".") or parsed_url.netloc.endswith("."):
@@ -644,48 +595,28 @@ def extract_keywords(text_content, top_n=10, custom_stopwords=None):
         logging.error(f"Fehler beim Extrahieren von Keywords: {e}")
         return []
 
-def validate_json(json_string: str) -> Optional[dict]:
-    """
-    Versucht, einen JSON-String in ein Python-Dictionary zu parsen.
-    Falls der JSON-String ungültig ist, wird None zurückgegeben und ein Fehler geloggt.
-    """
-    try:
-        return json.loads(json_string)
-    except json.JSONDecodeError as e:
-        logging.error(f"Ungültiges JSON-Format: {e}")
-        return None
-
-        
 def is_safe_css_selector(selector: str) -> bool:
-    """
-    Prüft, ob ein CSS-Selektor sicher ist.
-    Es werden potenziell gefährliche Muster (z. B. JavaScript-Injektion, CSS-Expression)
-    sowie unzulässige Selektoren (z. B. der exakte Selektor "script") blockiert.
-    """
     if not isinstance(selector, str) or not selector.strip():
         return False
 
     selector_lower = selector.lower()
 
-    # Liste unsicherer Muster:
     unsafe_patterns = [
-        r"^\s*script\s*$",             # exakter Match für "script"
-        r"<\s*script.*?>",             # HTML <script>-Tags
-        r"expression\s*\(",            # CSS expression() Funktion
-        r"javascript\s*:",             # javascript: Schema
-        r"url\s*\(\s*[^\s]*javascript\s*:", # javascript: in url()
-        r"@import",                   # @import-Anweisung
-        r"on\w+(\*?)\s*=",             # Event-Handler (z. B. onclick, onmouseover), inkl. möglichem "*=" Operator
-        r"data\s*:"                   # data: URLs
+        r"^\s*script\s*$",
+        r"<\s*script.*?>",
+        r"expression\s*\(",
+        r"javascript\s*:",
+        r"url\s*\(\s*[^\s]*javascript\s*:",
+        r"@import",
+        r"on\w+(\*?)\s*=",
+        r"data\s*:"
     ]
 
-    # Überprüfung der Muster im Selektor
     for pattern in unsafe_patterns:
         if re.search(pattern, selector_lower):
             logging.warning(f"Unsicherer CSS-Selektor erkannt: {selector}")
             return False
 
-    # Falls der Selektor Stil-Deklarationen enthält, werden nur erlaubte CSS-Eigenschaften zugelassen.
     if "{" in selector and "}" in selector:
         properties_values = selector.split('{')[1].rstrip('}').split(';')
         for prop_val in properties_values:
@@ -697,31 +628,27 @@ def is_safe_css_selector(selector: str) -> bool:
 
     return True
 
-
 def extract_data_css(html_content, css_selectors_json):
-    """
-    Extrahiert Daten aus HTML-Content basierend auf CSS-Selektoren, die als JSON-String übergeben werden.
-    """
     if not html_content or not css_selectors_json:
         return {}
-    
+
     css_selectors = validate_json(css_selectors_json)
     if css_selectors is None:
         return {"error": "Ungültiges CSS-Selektor JSON-Format"}
-    
+
     extracted_data = {}
     soup = BeautifulSoup(html_content, 'html.parser')
-    
+
     for name, selector_config in css_selectors.items():
-        selector_raw = None  # Initialisieren von selector_raw
+        selector_raw = None
         data_type = None
         cleanup_functions = []
 
         if isinstance(selector_config, dict):
             selector_raw = selector_config.get('selector')
-            data_type = selector_config.get('type') # 'type'  muss nicht None sein, kann string, integer, float usw. sein
+            data_type = selector_config.get('type')
             cleanup_functions = selector_config.get('cleanup', [])
-        elif isinstance(selector_config, str): # Wenn nur der Selektor als String angegeben ist
+        elif isinstance(selector_config, str):
             selector_raw = selector_config
         else:
             logging.warning(f"Ungültige Konfiguration für Selektor '{name}': {selector_config}")
@@ -742,7 +669,6 @@ def extract_data_css(html_content, css_selectors_json):
                 if cleanup_func_name == 'lower':
                     extracted_values = [val.lower() for val in extracted_values]
 
-
             if data_type:
                 converted_values = []
                 for value in extracted_values:
@@ -751,69 +677,52 @@ def extract_data_css(html_content, css_selectors_json):
                             converted_values.append(int(value))
                         elif data_type == 'float':
                             converted_values.append(float(value))
-                        elif data_type == "string": # String Typ explizit behandeln
+                        elif data_type == "string":
                             converted_values.append(str(value))
                         else:
                             logging.warning(f"Unbekannter Datentyp '{data_type}' für Selektor '{name}'. Wert wird als String behandelt.")
-                            converted_values.append(str(value)) # Default zu String, wenn unbekannter Typ
+                            converted_values.append(str(value))
                     except (ValueError, TypeError) as e:
                         logging.warning(f"Konvertierungsfehler für Wert '{value}' mit Typ '{data_type}': {e}. Wert wird übersprungen.")
-                        converted_values.append(None)  # oder einen anderen Standardwert
+                        converted_values.append(None)
                 extracted_data[name] = converted_values
             else:
-                 extracted_data[name] = extracted_values
+                extracted_data[name] = extracted_values
 
-
-            if not extracted_data[name]: # Leere Liste entfernen
-                del extracted_data[name] 
+            if not extracted_data[name]:
+                del extracted_data[name]
         else:
             logging.warning(f"CSS-Selektor '{selector_raw}' für '{name}' lieferte keine Ergebnisse.")
-    
-    return extracted_data
 
+    return extracted_data
 
 def save_content_to_file(content, filename):
     try:
-        # Pfad-Sanitisierung für Dateinamen (einfaches Beispiel, erweiterbar)
-        filename_sanitized = os.path.basename(filename) # Nur Dateinamen-Bestandteil verwenden, Pfad-Komponenten entfernen
-        filepath = os.path.join(".", filename_sanitized) # Speichern im aktuellen Verzeichnis (oder sicherem Unterverzeichnis)
+        filename_sanitized = os.path.basename(filename)
+        filepath = os.path.join(".", filename_sanitized)
         with open(filepath, 'w', encoding='utf-8') as file:
             file.write(content)
-        logging.info(f"Inhalt erfolgreich in Datei '{filepath}' gespeichert.") # Protokolliere tatsächlichen Dateipfad
+        logging.info(f"Inhalt erfolgreich in Datei '{filepath}' gespeichert.")
         return True
     except Exception as e:
         logging.error(f"Fehler beim Speichern in die Datei '{filename}': {e}", exc_info=True)
         return False
 
 def is_safe_path(filepath, base_dir):
-    """
-    Überprüft, ob der filepath innerhalb des base_dir liegt, um Path Traversal zu verhindern.
-    """
     if not filepath:
-        return True # Kein Pfad ist sicher
+        return True
     if not base_dir:
-        base_dir = "." # Default zum aktuellen Verzeichnis
+        base_dir = "."
     base_path = os.path.abspath(base_dir)
     filepath_abs = os.path.abspath(filepath)
     common_path = os.path.commonpath([base_path, filepath_abs])
-    return common_path == base_path # filepath_abs muss innerhalb base_path liegen
-    # TODO: Unit-Tests für is_safe_path() schreiben, um verschiedene Pfadszenarien zu testen
+    return common_path == base_path
 
 def load_processing_function(function_path):
-    """
-    Lädt dynamisch eine Verarbeitungsfunktion aus einer Python-Datei.
-    Führt Sicherheitsprüfungen durch.
-
-    Args:
-        function_path (str): Pfad zur Python-Datei, die die Funktion enthält.
-
-    Returns:
-        function: Die geladene Verarbeitungsfunktion oder None bei Fehlern.
-    """
     if not function_path:
         return None
 
-    if not is_safe_path(function_path, PROCESSING_FUNCTIONS_DIR): # Pfad-Validierung
+    if not is_safe_path(function_path, PROCESSING_FUNCTIONS_DIR):
         logging.error(f"Ungültiger oder unsicherer Pfad zur Processing-Funktion: '{function_path}'. Laden abgebrochen.")
         return None
 
@@ -824,16 +733,14 @@ def load_processing_function(function_path):
             return None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        processing_function = getattr(module, ALLOWED_PROCESSING_FUNCTION_NAME, None) # Verwende Whitelist für Funktionsnamen
+        processing_function = getattr(module, ALLOWED_PROCESSING_FUNCTION_NAME, None)
         if not processing_function or not callable(processing_function):
             logging.error(f"Verarbeitungsfunktion '{ALLOWED_PROCESSING_FUNCTION_NAME}' nicht gefunden oder nicht aufrufbar in '{function_path}'.")
             return None
-        # Zusätzliche Validierung der Funktionssignatur (optional, aber empfehlenswert für Sicherheit)
         try:
-            # Überprüfe, ob die Funktion ein Argument akzeptiert (einfache Prüfung)
             import inspect
             sig = inspect.signature(processing_function)
-            if len(sig.parameters) != 1: # Erwartet genau ein Parameter
+            if len(sig.parameters) != 1:
                 logging.error(f"Verarbeitungsfunktion '{ALLOWED_PROCESSING_FUNCTION_NAME}' in '{function_path}' erwartet nicht die korrekte Anzahl an Argumenten (erwartet 1). Laden abgebrochen.")
                 return None
         except Exception as sig_err:
@@ -845,22 +752,18 @@ def load_processing_function(function_path):
         logging.error(f"Fehler beim Laden der Verarbeitungsfunktion aus '{function_path}': {e}", exc_info=True)
         return None
 
-def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None, css_selectors_cli=None, save_file_cli=False, processing_function_path=None, task_id=None): # task_id hinzugefügt
-    """
-    Führt den Scraping-Prozess für eine einzelne URL aus und speichert die Daten in der Datenbank.
-    Diese Funktion ist für die zeitgesteuerte Ausführung gedacht.
-    """
-    start_time = datetime.datetime.now() # Startzeitpunkt für Status-Tracking
-    error_message = None # Initialisiere error_message
+def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None, css_selectors_cli=None, save_file_cli=False, processing_function_path=None, task_id=None):
+    start_time = datetime.datetime.now()
+    error_message = None
 
-    logging.info(f"Starte geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {start_time.isoformat()}") # Detailliertere Startzeit im Log
-    update_scheduled_task_running_status_db(task_id, 'running') # Status auf 'running' setzen, bevor Task startet
+    logging.info(f"Starte geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {start_time.isoformat()}")
+    update_scheduled_task_running_status_db(task_id, 'running')
 
     domain_name = extract_domain(url)
     if not domain_name:
-        error_message = "Ungültige URL" # Fehlermeldung setzen
-        logging.error(f"Ungültige URL '{url}'. Geplanter Task (ID: {task_id}) abgebrochen.") # Task-ID im Log
-        update_scheduled_task_status_db(task_id, start_time, 'failure - invalid URL', error_message=error_message) # Status in DB aktualisieren mit Fehlermeldung
+        error_message = "Ungültige URL"
+        logging.error(f"Ungültige URL '{url}'. Geplanter Task (ID: {task_id}) abgebrochen.")
+        update_scheduled_task_status_db(task_id, start_time, 'failure - invalid URL', error_message=error_message)
         return
 
     webpage_content = fetch_webpage_content(url)
@@ -872,26 +775,24 @@ def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None
         keywords = extract_keywords(text_content if text_content else extract_text_content(webpage_content), custom_stopwords=custom_stopwords_cli)
         css_data = extract_data_css(webpage_content, css_selectors_cli)
 
-        # Datenverarbeitungsfunktion laden und anwenden, falls angegeben
-        processed_content = None # Initialwert für den Fall, dass keine Verarbeitung erfolgt
+        processed_content = None
         if processing_function_path:
-            processed_content = apply_processing_function(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, css_data, processing_function_path) # Funktion aufrufen
+            processed_content = apply_processing_function(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, css_data, processing_function_path)
 
-        content_to_save_db = text_content if extract_text_only else webpage_content # ursprünglicher Inhalt, falls keine Verarbeitung
+        content_to_save_db = text_content if extract_text_only else webpage_content
         if save_to_db(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, processed_content):
-            end_time = datetime.datetime.now() # Endzeitpunkt erfassen
-            logging.info(f"Geplanter Task (ID: {task_id}) für URL '{url}' erfolgreich abgeschlossen um {end_time.isoformat()}. Daten in Datenbank aktualisiert.") # Detailliertere Endzeit im Log
-            # Nächste Ausführungszeit berechnen und Status auf 'success' setzen
-            next_run_time = calculate_next_run(task_id) # Funktion zur Berechnung der nächsten Ausführungszeit
-            update_scheduled_task_status_db(task_id, start_time, 'success', next_run_time=next_run_time) # Status in DB aktualisieren mit next_run_time
+            end_time = datetime.datetime.now()
+            logging.info(f"Geplanter Task (ID: {task_id}) für URL '{url}' erfolgreich abgeschlossen um {end_time.isoformat()}. Daten in Datenbank aktualisiert.")
+            next_run_time = calculate_next_run(task_id)
+            update_scheduled_task_status_db(task_id, start_time, 'success', next_run_time=next_run_time)
         else:
-            error_message = "Fehler beim Speichern in Datenbank" # Fehlermeldung setzen
-            end_time = datetime.datetime.now() # Endzeitpunkt erfassen
-            logging.error(f"Fehler beim Speichern der Daten in der Datenbank für URL '{url}' (geplanter Task ID: {task_id}) um {end_time.isoformat()}.") # Detailliertere Endzeit im Log
-            update_scheduled_task_status_db(task_id, start_time, 'failure - db save error', error_message=error_message) # Status in DB aktualisieren mit Fehlermeldung
+            error_message = "Fehler beim Speichern in Datenbank"
+            end_time = datetime.datetime.now()
+            logging.error(f"Fehler beim Speichern der Daten in der Datenbank für URL '{url}' (geplanter Task ID: {task_id}) um {end_time.isoformat()}.")
+            update_scheduled_task_status_db(task_id, start_time, 'failure - db save error', error_message=error_message)
 
         if css_data:
-            logging.info(f"Extrahierte CSS-Daten für URL '{url}' (geplanter Task ID: {task_id}): {json.dumps(css_data, indent=2, ensure_ascii=False)}") # Task-ID im Log
+            logging.info(f"Extrahierte CSS-Daten für URL '{url}' (geplanter Task ID: {task_id}): {json.dumps(css_data, indent=2, ensure_ascii=False)}")
 
         if save_file_cli:
             if extract_text_only:
@@ -902,37 +803,33 @@ def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None
                 content_to_save_file = webpage_content
             if content_to_save_file:
                 if save_content_to_file(content_to_save_file, filename):
-                    logging.info(f"Inhalt für URL '{url}' zusätzlich in Datei '{filename}' gespeichert (geplanter Task ID: {task_id}).") # Task-ID im Log
+                    logging.info(f"Inhalt für URL '{url}' zusätzlich in Datei '{filename}' gespeichert (geplanter Task ID: {task_id}).")
                 else:
-                    error_message = "Fehler beim Speichern in Datei" # Fehlermeldung setzen
-                    logging.error(f"Fehler beim Speichern des Inhalts in Datei für URL '{url}' (geplanter Task ID: {task_id}).") # Task-ID im Log
+                    error_message = "Fehler beim Speichern in Datei"
+                    logging.error(f"Fehler beim Speichern des Inhalts in Datei für URL '{url}' (geplanter Task ID: {task_id}).")
             else:
-                error_message = "Kein Inhalt zum Speichern in Datei" # Fehlermeldung setzen
-                logging.error(f"Kein Inhalt zum Speichern in Datei vorhanden für URL '{url}' (geplanter Task ID: {task_id}).") # Task-ID im Log
+                error_message = "Kein Inhalt zum Speichern in Datei"
+                logging.error(f"Kein Inhalt zum Speichern in Datei vorhanden für URL '{url}' (geplanter Task ID: {task_id}).")
 
     else:
-        error_message = "Abrufen des Webseiteninhalts fehlgeschlagen" # Fehlermeldung setzen
-        end_time = datetime.datetime.now() # Endzeitpunkt erfassen
-        logging.error(f"Abrufen des Webseiteninhalts für URL '{url}' fehlgeschlagen (geplanter Task ID: {task_id}) um {end_time.isoformat()}.") # Detailliertere Endzeit im Log
-        update_scheduled_task_status_db(task_id, start_time, 'failure - fetch error', error_message=error_message) # Status in DB aktualisieren mit Fehlermeldung
+        error_message = "Abrufen des Webseiteninhalts fehlgeschlagen"
+        end_time = datetime.datetime.now()
+        logging.error(f"Abrufen des Webseiteninhalts für URL '{url}' fehlgeschlagen (geplanter Task ID: {task_id}) um {end_time.isoformat()}.")
+        update_scheduled_task_status_db(task_id, start_time, 'failure - fetch error', error_message=error_message)
 
-        logging.error(f"Kritischer Fehler beim Abrufen von URL '{url}' (Task ID: {task_id}). Siehe vorherige Log-Einträge für Details.") # Expliziter ERROR Log für Benachrichtigung
-        # TODO: Fehlerbenachrichtigung senden (z.B. per E-Mail, Slack) bei kritischen Fehlern
-        # if error_message and is_critical_error(error_message): # Funktion um kritische Fehler zu definieren
-        #     send_notification(f"Kritischer Fehler bei Task {task_id} für URL {url}: {error_message}")
+        logging.error(f"Kritischer Fehler beim Abrufen von URL '{url}' (Task ID: {task_id}). Siehe vorherige Log-Einträge für Details.")
 
-    logging.info(f"Beende geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {datetime.datetime.now().isoformat()}. Status: {status}, Fehler: {error_message if error_message else 'Kein Fehler'}") # Detaillierterer End-Log mit Fehlerstatus
+    logging.info(f"Beende geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {datetime.datetime.now().isoformat()}. Status: {status}, Fehler: {error_message if error_message else 'Kein Fehler'}")
 
 def calculate_next_run(task_id):
-    """Berechnet die nächste Ausführungszeit für einen Task basierend auf dem Schedule."""
     task_config = get_scheduled_task_from_db(task_id)
     if not task_config:
-        logging.warning(f"Task-Konfiguration für ID '{task_id}' nicht gefunden. Berechnung der nächsten Ausführungszeit nicht möglich.") # Warnung, wenn Task-Config fehlt
+        logging.warning(f"Task-Konfiguration für ID '{task_id}' nicht gefunden. Berechnung der nächsten Ausführungszeit nicht möglich.")
         return None
 
     schedule_time_str = task_config.get('schedule_time')
     if not schedule_time_str:
-        logging.warning(f"Zeitplan für Task ID '{task_id}' nicht definiert. Berechnung der nächsten Ausführungszeit nicht möglich.") # Warnung, wenn Schedule fehlt
+        logging.warning(f"Zeitplan für Task ID '{task_id}' nicht definiert. Berechnung der nächsten Ausführungszeit nicht möglich.")
         return None
 
     now = datetime.datetime.now()
@@ -945,40 +842,37 @@ def calculate_next_run(task_id):
         try:
             hour, minute = map(int, time_str.split(':'))
             next_run_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if next_run_time <= now: # Wenn Zeit heute schon vorbei, dann für morgen planen
+            if next_run_time <= now:
                 next_run_time += datetime.timedelta(days=1)
             next_run = next_run_time
         except ValueError:
-            logging.error(f"Fehler beim Parsen der Zeit für Task ID '{task_id}'. Ungültiges Zeitformat: '{time_str}'. Nächste Ausführungszeit nicht berechenbar.") # Detailliertere Fehlermeldung
+            logging.error(f"Fehler beim Parsen der Zeit für Task ID '{task_id}'. Ungültiges Zeitformat: '{time_str}'. Nächste Ausführungszeit nicht berechenbar.")
             return None
     elif schedule_time_str.lower().startswith("alle"):
         parts = schedule_time_str.split()
         if len(parts) == 3 and parts[1].isdigit() and parts[2].lower() in ["minuten", "minute"]:
             interval = int(parts[1])
-            if interval <= 0: # Schutz vor ungültigen Intervallen
-                logging.error(f"Ungültiges Minutenintervall für Task ID '{task_id}'. Intervall muss größer als 0 sein. Nächste Ausführungszeit nicht berechenbar.") # Fehlermeldung für ungültiges Intervall
+            if interval <= 0:
+                logging.error(f"Ungültiges Minutenintervall für Task ID '{task_id}'. Intervall muss größer als 0 sein. Nächste Ausführungszeit nicht berechenbar.")
             next_run = now + datetime.timedelta(minutes=interval)
         else:
-            logging.error(f"Ungültiges Zeitformat für Task ID '{task_id}'. Format muss 'alle X minuten' sein, wobei X eine positive Zahl ist. Nächste Ausführungszeit nicht berechenbar.") # Detailliertere Fehlermeldung
+            logging.error(f"Ungültiges Zeitformat für Task ID '{task_id}'. Format muss 'alle X minuten' sein, wobei X eine positive Zahl ist. Nächste Ausführungszeit nicht berechenbar.")
             return None
     else:
-        logging.warning(f"Unbekanntes Zeitplanformat '{schedule_time}' für Task ID '{task_id}'. Nächste Ausführungszeit nicht berechenbar.") # Warnung für unbekanntes Format
+        logging.warning(f"Unbekanntes Zeitplanformat '{schedule_time}' für Task ID '{task_id}'. Nächste Ausführungszeit nicht berechenbar.")
         return None
 
-    return next_run.isoformat() if next_run else None # Rückgabe im ISO-Format für Datenbank
+    return next_run.isoformat() if next_run else None
 
 def setup_scheduled_tasks():
-    """
-    Lädt geplante Aufgaben aus der Datenbank und richtet sie mit schedule ein.
-    """
-    schedule.clear() # Vor dem Einrichten, alle vorherigen Tasks löschen
-    scheduled_tasks = load_scheduled_tasks() # Tasks aus DB laden
+    schedule.clear()
+    scheduled_tasks = load_scheduled_tasks()
     if not scheduled_tasks:
-        logging.info("Keine geplanten Aufgaben in der Datenbank gefunden.") # Geändert zu Datenbank
+        logging.info("Keine geplanten Aufgaben in der Datenbank gefunden.")
         return
 
     for task_config in scheduled_tasks:
-        task_id = task_config.get('id') # Task-ID aus Konfiguration lesen (jetzt aus DB)
+        task_id = task_config.get('id')
         url = task_config.get('url')
         schedule_time = task_config.get('schedule_time')
         extract_text_only = task_config.get('text_only', False)
@@ -987,79 +881,65 @@ def setup_scheduled_tasks():
         save_file_cli = task_config.get('save_file', False)
         processing_function_path = task_config.get('processing_function_path')
 
-        if not url or not schedule_time or not task_id: # task_id muss auch vorhanden sein
-            logging.warning(f"Ungültige Aufgabenkonfiguration gefunden: {task_config}. 'id', 'url' und 'schedule_time' müssen angegeben sein.") # ID wird nun auch benötigt
+        if not url or not schedule_time or not task_id:
+            logging.warning(f"Ungültige Aufgabenkonfiguration gefunden: {task_config}. 'id', 'url' und 'schedule_time' müssen angegeben sein.")
             continue
 
-        # Schedule-Zeit in schedule-kompatibles Format umwandeln (vereinfacht)
         if schedule_time.lower() == "stündlich":
-            job = schedule.every().hour.do(run_threaded, task_function=scrape_and_store_url, url=url, extract_text_only=extract_text_only, custom_stopwords_cli=custom_stopwords_cli, css_selectors_cli=css_selectors_cli, save_file_cli=save_file_cli, processing_function_path=processing_function_path, task_id=task_id) # task_id übergeben, run_threaded verwenden
-            job.id = task_id # Task-ID im Job speichern (optional, da task_id schon übergeben wird)
+            job = schedule.every().hour.do(run_threaded, task_function=scrape_and_store_url, url=url, extract_text_only=extract_text_only, custom_stopwords_cli=custom_stopwords_cli, css_selectors_cli=css_selectors_cli, save_file_cli=save_file_cli, processing_function_path=processing_function_path, task_id=task_id)
+            job.id = task_id
             logging.info(f"Geplant (ID: {task_id}): Stündlicher Scraping-Task für URL '{url}'.")
-        elif schedule_time.lower().startswith("täglich um"): # z.B. "täglich um 08:00"
-            time_str = schedule_time.split("um")[1].strip() # "08:00" extrahieren
+        elif schedule_time.lower().startswith("täglich um"):
+            time_str = schedule_time.split("um")[1].strip()
             try:
-                job = schedule.every().day.at(time_str).do(run_threaded, task_function=scrape_and_store_url, url=url, extract_text_only=extract_text_only, custom_stopwords_cli=custom_stopwords_cli, css_selectors_cli=css_selectors_cli, save_file_cli=save_file_cli, processing_function_path=processing_function_path, task_id=task_id) # task_id übergeben, run_threaded verwenden
-                job.id = task_id # Task-ID im Job speichern (optional, da task_id schon übergeben wird)
+                job = schedule.every().day.at(time_str).do(run_threaded, task_function=scrape_and_store_url, url=url, extract_text_only=extract_text_only, custom_stopwords_cli=custom_stopwords_cli, css_selectors_cli=css_selectors_cli, save_file_cli=save_file_cli, processing_function_path=processing_function_path, task_id=task_id)
+                job.id = task_id
                 logging.info(f"Geplant (ID: {task_id}): Täglicher Scraping-Task für URL '{url}' um {time_str} Uhr.")
             except Exception as e:
                 logging.error(f"Fehler beim Parsen der Zeit '{time_str}' für URL '{url}': {e}. Task nicht geplant.")
-        elif schedule_time.lower().startswith("alle"): # z.B. "alle 30 minuten"
-            parts = schedule_time.split() # ["alle", "30", "minuten"]
+        elif schedule_time.lower().startswith("alle"):
+            parts = schedule_time.split()
             if len(parts) == 3 and parts[1].isdigit() and parts[2].lower() in ["minuten", "minute"]:
                 interval = int(parts[1])
-                job = schedule.every(interval).minutes.do(run_threaded, task_function=scrape_and_store_url, url=url, extract_text_only=extract_text_only, custom_stopwords_cli=custom_stopwords_cli, css_selectors_cli=css_selectors_cli, save_file_cli=save_file_cli, processing_function_path=processing_function_path, task_id=task_id) # task_id übergeben, run_threaded verwenden
-                job.id = task_id # Task-ID im Job speichern (optional, da task_id schon übergeben wird)
+                job = schedule.every(interval).minutes.do(run_threaded, task_function=scrape_and_store_url, url=url, extract_text_only=extract_text_only, custom_stopwords_cli=custom_stopwords_cli, css_selectors_cli=css_selectors_cli, save_file_cli=save_file_cli, processing_function_path=processing_function_path, task_id=task_id)
+                job.id = task_id
                 logging.info(f"Geplant (ID: {task_id}): Scraping-Task für URL '{url}' alle {interval} Minuten.")
             else:
                 logging.warning(f"Ungültiges Zeitformat '{schedule_time}' für URL '{url}'. Task nicht geplant.")
         else:
             logging.warning(f"Unbekanntes Zeitplanformat '{schedule_time}' für URL '{url}'. Task nicht geplant.")
 
-        # Nächste Ausführungszeit initial beim Setup setzen
         next_run_time = calculate_next_run(task_id)
         if next_run_time:
-            if not update_scheduled_task_in_db(task_id, {'next_run_time': next_run_time}): # Fehlerbehandlung beim DB-Update
-                logging.error(f"Fehler beim Speichern der nächsten Ausführungszeit für Task ID '{task_id}' in der Datenbank.") # Log-Meldung, falls Update fehlschlägt
+            if not update_scheduled_task_in_db(task_id, {'next_run_time': next_run_time}):
+                logging.error(f"Fehler beim Speichern der nächsten Ausführungszeit für Task ID '{task_id}' in der Datenbank.")
 
 def run_threaded(task_function, **kwargs):
-    """Führt eine gegebene Task-Funktion in einem separaten Thread aus."""
     job_thread = threading.Thread(target=task_function, kwargs=kwargs)
     job_thread.start()
 
-# --- Verbesserte API Response Struktur und Fehlerbehandlung (angepasst für detailliertere Fehler) ---
-
-from flask import jsonify, Response
-
 def create_api_response(data=None, message=None, errors=None, status_code=200) -> Response:
-    """
-    Erstellt eine konsistente API-Response im JSON-Format mit verbesserter Fehlerbehandlung.
-    """
     response_body = {}
     if message:
         response_body['message'] = message
     if data:
         response_body['data'] = data
     if errors:
-        response_body['errors'] = errors # Fehler-Dictionary
-        if not message and errors: # Wenn keine explizite Message, aber Fehler, generiere generische Fehlermeldung
-            response_body['message'] = "Fehler bei der Anfrageverarbeitung." # Generische Fehlermeldung bei Fehlern
-    return jsonify(response_body), status_code # Statuscode direkt zurückgeben
+        response_body['errors'] = errors
+        if not message and errors:
+            response_body['message'] = "Fehler bei der Anfrageverarbeitung."
+    return jsonify(response_body), status_code
 
-@app.errorhandler(ValidationError) # Pydantic Validation Error Handler registrieren
+@app.errorhandler(ValidationError)
 def handle_validation_error(error):
-    """
-    Handler für Pydantic Validierungsfehler.
-    Gibt eine formatierte Fehlerantwort zurück mit detaillierten Fehlermeldungen.
-    """
     detailed_errors = []
     for error_item in error.errors():
         detailed_errors.append({
-            "field": error_item['loc'][0], # Feldname extrahieren
-            "error_type": error_item['type'], # Fehlertyp
-            "message": error_item['msg'] # Detaillierte Fehlermeldung
+            "field": error_item['loc'][0],
+            "error_type": error_item['type'],
+            "message": error_item['msg']
         })
-    return create_api_response(errors=detailed_errors, message="Validierungsfehler im Request Body", status_code=400) # Fehler-Dictionary in Response
+    return create_api_response(errors=detailed_errors, message="Validierungsfehler im Request Body", status_code=400)
 
 @app.route('/api/v1/', methods=['GET'])
 @require_api_key
@@ -1263,7 +1143,6 @@ def api_fetch_text():
 
     return fetch_content_api(url_raw, stopwords_param, css_selectors_param_raw, processing_function_path, save_file_cli, extract_text_only=True)
 
-    
 def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_function_path, save_file_cli, extract_text_only):
     logging.info(f"API Anfrage für {'Text' if extract_text_only else 'HTML'}-Inhalt von URL: {url}")
     webpage_content = fetch_webpage_content(url)
@@ -1305,15 +1184,12 @@ def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_
                 response_data["filename"] = filename
             if processed_content:
                 response_data["processed_data"] = json.loads(processed_content)
-            # Korrektur: Gib das Ergebnis von create_api_response ZURÜCK
             return create_api_response(data=response_data, message="Webseiteninhalt erfolgreich abgerufen und verarbeitet.")
         else:
-            # Korrektur: Gib das Ergebnis von create_api_response ZURÜCK
             return create_api_response(errors=["Fehler beim Speichern in die Datenbank"], message="Fehler beim Speichern in die Datenbank.", status_code=500)
     else:
-        # Korrektur: Gib das Ergebnis von create_api_response ZURÜCK
-        return create_api_response(errors=["Webseiteninhalt konnte nicht abgerufen werden"], message="Webseiteninhalt konnte nicht abgerufen werden.", status_code=500)       
-        
+        return create_api_response(errors=["Webseiteninhalt konnte nicht abgerufen werden"], message="Webseiteninhalt konnte nicht abgerufen werden.", status_code=500)
+
 @app.route('/api/v1/health', methods=['GET'])
 @require_api_key
 def api_health_check():
@@ -1345,37 +1221,6 @@ def api_health_check():
     }
     status_code = 200 if db_healthy and scheduler_healthy else 500
     return create_api_response(data=health_status, message="Health-Check durchgeführt.", status_code=status_code)
-
-# --- Main Funktion und Kommandozeilen-Verarbeitung (leicht angepasst) ---
-
-def main():
-    init_db()
-    parser = argparse.ArgumentParser(description="Extrahiert den Inhalt einer Webseite, strukturierte Daten und Keywords und speichert sie in einer Datenbank oder startet eine Web-API. **Sicherheitshinweis:** Seien Sie vorsichtig bei der Verwendung von benutzerdefinierten Processing-Funktionen und CSS-Selektoren, um Sicherheitsrisiken zu minimieren. **API-Key, Rate Limiting und Caching sind aktiv. Erweiterte Task-Verwaltung, Datenbank-Transaktionen, verbesserte Fehlerbehandlung und sicherheitsgeprüftes Monitoring verfügbar.**")
-    parser.add_argument("url", nargs='?', default=None, help="Die URL der Webseite, deren Inhalt extrahiert werden soll (für einmaligen Kommandozeilenmodus). Wenn keine URL angegeben und --api nicht verwendet, werden geplante Tasks ausgeführt.")
-    parser.add_argument("--text", action="store_true", help="Speichert nur den extrahierten Textinhalt anstatt des gesamten HTML-Codes.")
-    parser.add_argument("--api", action="store_true", help="Startet die Web-API anstatt des Kommandozeilenmodus oder der geplanten Tasks.")
-    parser.add_argument("--save-file", action="store_true", help="Speichert den Inhalt zusätzlich zur Datenbank in einer Datei.")
-    parser.add_argument("--stopwords", type=str, default=None, help="Kommagetrennte Liste von zusätzlichen Stopwörtern für die Keyword-Extraktion.")
-    parser.add_argument("--css-selectors", type=str, default=None, help="JSON-String von CSS-Selektoren zur Datenextraktion. Kann einfache Selektoren oder konfigurierte Selektoren mit Datentypen und Bereinigungsfunktionen enthalten. **Sicherheitshinweis:**  Validieren Sie CSS-Selektoren sorgfältig, um Injection-Angriffe zu vermeiden.")
-    parser.add_argument("--processing-function", type=str, default=None, dest="processing_function_path", help="Pfad zu einer Python-Datei, die eine 'process_data(data)' Funktion enthält zur benutzerdefinierten Datenverarbeitung. **Sicherheitshinweis:**  Stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen, da dies die Sicherheit des Systems beeinträchtigen kann.")
-
-    args = parser.parse_args()
-
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        nltk.download('stopwords')
-
-    setup_scheduled_tasks()
-
-    if args.api:
-        logging.info(f"Starte Flask API mit erweiterter Task-Verwaltung (CRUD, Status-Monitoring, manuelle Task-Auslösung), Status-Tracking in Datenbank, API-Key Authentifizierung, Rate Limiting (max. {RATE_LIMIT_REQUESTS_PER_MINUTE} Anfragen pro Minute), Caching (Gültigkeit: {CACHE_EXPIRY_SECONDS} Sekunden), Datenbank-Transaktionen, verbesserter Fehlerbehandlung und **sicherheitsgeprüftem Monitoring**...")
-        app.run(debug=API_DEBUG_MODE)
-    elif args.url:
-        run_command_line_scraping(args)
-    else:
-        IS_SCHEDULED_MODE = True
-        run_scheduled_mode()
 
 def run_command_line_scraping(args):
     url_raw = args.url
@@ -1484,6 +1329,118 @@ def run_scheduled_mode():
             logging.error(f"Kritischer Fehler im Scheduler-Loop. Programm läuft weiter, aber Scheduler-Funktionalität könnte beeinträchtigt sein.  Bitte Logs prüfen.")
             send_notification(f"Kritischer Fehler im Scheduler-Loop: {e_scheduler}")
         time.sleep(1)
+
+def run_streamlit():
+    """Streamlit-Webanwendung zur Taskverwaltung."""
+
+    st.title("WebCrawler-Pro Admin-Dashboard")
+
+    # API-Key-Authentifizierung für Streamlit (einfach)
+    api_key_input = st.text_input("API-Key eingeben:", type="password")
+    if not api_key_input or not validate_api_key(api_key_input):
+        st.error("Ungültiger API-Key.")
+        return
+
+    # Tasks laden
+    tasks = load_scheduled_tasks()
+
+    # Tasks anzeigen
+    st.subheader("Geplante Tasks")
+    if tasks:
+        for task in tasks:
+            with st.expander(f"Task ID: {task['id']}"):
+                st.write(f"URL: {task['url']}")
+                st.write(f"Zeitplan: {task['schedule_time']}")
+                st.write(f"Nur Text: {task['text_only']}")
+                st.write(f"Stopwörter: {task['stopwords']}")
+                st.write(f"CSS-Selektoren: {task['css_selectors']}")
+                st.write(f"Datei speichern: {task['save_file']}")
+                st.write(f"Verarbeitungsfunktion: {task['processing_function_path']}")
+                st.write(f"Status: {task['status']}")
+                st.write(f"Letzte Ausführung: {task['last_run_time']}")
+                st.write(f"Nächste Ausführung: {task['next_run_time']}")
+                st.write(f"Fehlermeldung: {task['error_message']}")
+
+                # Task löschen
+                if st.button(f"Task {task['id']} löschen"):
+                    if delete_scheduled_task_from_db(task['id']):
+                        st.success("Task erfolgreich gelöscht.")
+                        setup_scheduled_tasks()  # Tasks neu laden
+                        st.experimental_rerun()  # Streamlit neu laden
+                    else:
+                        st.error("Fehler beim Löschen des Tasks.")
+
+                # Task sofort ausführen
+                if st.button(f"Task {task['id']} sofort ausführen"):
+                     api_run_scheduled_task_by_id(task['id'])
+                     st.success("Task wird ausgeführt.") # Bestätigung anzeigen
+                     st.experimental_rerun() # Streamlit neu laden
+
+    else:
+        st.info("Keine geplanten Tasks gefunden.")
+
+    # Neuen Task hinzufügen
+    st.subheader("Neuen Task hinzufügen")
+    with st.form("new_task"):
+        url = st.text_input("URL:")
+        schedule_time = st.text_input("Zeitplan (z.B. stündlich, täglich um 10:00, alle 30 minuten):")
+        text_only = st.checkbox("Nur Text extrahieren")
+        stopwords = st.text_input("Stopwörter (kommagetrennt):")
+        css_selectors = st.text_area("CSS-Selektoren (JSON):")
+        save_file = st.checkbox("Datei speichern")
+        processing_function_path = st.text_input("Verarbeitungsfunktion (Pfad):")
+
+        if st.form_submit_button("Task hinzufügen"):
+            try:
+                task_payload = ScheduledTaskPayload(
+                    url=url, schedule_time=schedule_time, text_only=text_only, stopwords=stopwords,
+                    css_selectors=css_selectors, save_file=save_file, processing_function_path=processing_function_path
+                )
+            except ValidationError as e:
+                st.error(str(e)) # Fehler anzeigen
+                return
+
+            task_data = task_payload.dict()
+            task_data['id'] = str(uuid.uuid4())
+
+            if save_scheduled_task_to_db(task_data):
+                st.success("Task erfolgreich hinzugefügt.")
+                setup_scheduled_tasks() # Tasks neu laden
+                st.experimental_rerun()  # Streamlit neu laden
+            else:
+                st.error("Fehler beim Hinzufügen des Tasks.")
+
+def main():
+    init_db()
+    parser = argparse.ArgumentParser(description="Extrahiert den Inhalt einer Webseite, strukturierte Daten und Keywords und speichert sie in einer Datenbank oder startet eine Web-API. **Sicherheitshinweis:** Seien Sie vorsichtig bei der Verwendung von benutzerdefinierten Processing-Funktionen und CSS-Selektoren, um Sicherheitsrisiken zu minimieren. **API-Key, Rate Limiting und Caching sind aktiv. Erweiterte Task-Verwaltung, Datenbank-Transaktionen, verbesserte Fehlerbehandlung und sicherheitsgeprüftes Monitoring verfügbar.**")
+    parser.add_argument("url", nargs='?', default=None, help="Die URL der Webseite, deren Inhalt extrahiert werden soll (für einmaligen Kommandozeilenmodus). Wenn keine URL angegeben und --api nicht verwendet, werden geplante Tasks ausgeführt.")
+    parser.add_argument("--text", action="store_true", help="Speichert nur den extrahierten Textinhalt anstatt des gesamten HTML-Codes.")
+    parser.add_argument("--api", action="store_true", help="Startet die Web-API anstatt des Kommandozeilenmodus oder der geplanten Tasks.")
+    parser.add_argument("--save-file", action="store_true", help="Speichert den Inhalt zusätzlich zur Datenbank in einer Datei.")
+    parser.add_argument("--stopwords", type=str, default=None, help="Kommagetrennte Liste von zusätzlichen Stopwörtern für die Keyword-Extraktion.")
+    parser.add_argument("--css-selectors", type=str, default=None, help="JSON-String von CSS-Selektoren zur Datenextraktion. Kann einfache Selektoren oder konfigurierte Selektoren mit Datentypen und Bereinigungsfunktionen enthalten. **Sicherheitshinweis:**  Validieren Sie CSS-Selektoren sorgfältig, um Injection-Angriffe zu vermeiden.")
+    parser.add_argument("--processing-function", type=str, default=None, dest="processing_function_path", help="Pfad zu einer Python-Datei, die eine 'process_data(data)' Funktion enthält zur benutzerdefinierten Datenverarbeitung. **Sicherheitshinweis:**  Stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen, da dies die Sicherheit des Systems beeinträchtigen kann.")
+    parser.add_argument("--streamlit", action="store_true", help="Startet das Streamlit Web-UI für die Admin-Oberfläche.")
+
+    args = parser.parse_args()
+
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+
+    setup_scheduled_tasks()
+
+    if args.api:
+        logging.info(f"Starte Flask API mit erweiterter Task-Verwaltung (CRUD, Status-Monitoring, manuelle Task-Auslösung), Status-Tracking in Datenbank, API-Key Authentifizierung, Rate Limiting (max. {RATE_LIMIT_REQUESTS_PER_MINUTE} Anfragen pro Minute), Caching (Gültigkeit: {CACHE_EXPIRY_SECONDS} Sekunden), Datenbank-Transaktionen, verbesserter Fehlerbehandlung und **sicherheitsgeprüftem Monitoring**...")
+        app.run(debug=API_DEBUG_MODE)
+    elif args.url:
+        run_command_line_scraping(args)
+    elif args.streamlit:
+        run_streamlit()
+    else:
+        IS_SCHEDULED_MODE = True
+        run_scheduled_mode()
 
 if __name__ == "__main__":
     main()
