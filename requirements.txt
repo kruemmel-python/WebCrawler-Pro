@@ -1,0 +1,10 @@
+requests
+beautifulsoup4
+selenium
+webdriver-manager
+Flask
+PyYAML
+pydantic
+nltk
+schedule
+python-dotenv

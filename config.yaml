@@ -1,0 +1,44 @@
+allowed_css_properties:
+- color
+- font-size
+- background-color
+- margin
+- padding
+- text-align
+- font-weight
+- text-decoration
+- font-family
+- border
+- border-radius
+- width
+- height
+- display
+- visibility
+- opacity
+- cursor
+- list-style-type
+- vertical-align
+allowed_processing_function_name: process_data
+api_debug_mode: true
+api_keys:
+- f87abfe7-b120-4bb1-b0d0-a3e31bcd2aaa
+- e5975e9d-377a-409a-aa8e-df003081562c
+- ffe1ebef-40aa-42a5-a55d-2d77aefb0884
+cache_enabled: true
+cache_expiry_seconds: 600
+database_file: webdata.db
+log_level: INFO
+max_retries: 3
+processing_functions_dir: .
+rate_limit_enabled: true
+rate_limit_requests_per_minute: 20
+retry_delay: 2
+schedule_config_file: scheduled_tasks.json
+selenium_config:
+  disable_dev_shm_usage: true
+  disable_extensions: true
+  disable_gpu: true
+  headless: true
+  no_sandbox: true
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
+    like Gecko) Chrome/91.0.4472.124 Safari/537.36
