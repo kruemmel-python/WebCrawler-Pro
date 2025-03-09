@@ -1,4 +1,4 @@
-### **Softwarebewertung – Web-Scraping und API-Programm**  
+# **Softwarebewertung – WebCrawler-Pro**  
 **Autor: CipherCore**  
 **Datum: März 2025**  
 **Version: 1.0**  
@@ -6,9 +6,9 @@
 ---
 
 ## **1. Einführung**  
-Das **Web-Scraping und API-Programm** von CipherCore ist eine leistungsfähige, vielseitige und sichere Anwendung zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert fortschrittliche **Scraping-Techniken** mit einer **skalierbaren API-Architektur** und bietet eine Reihe von Sicherheitsmechanismen zum Schutz der Daten und Infrastruktur.  
+WebCrawler-Pro ist eine leistungsfähige, vielseitige und sichere Anwendung zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert fortschrittliche **Scraping-Techniken** mit einer **skalierbaren API-Architektur** und bietet eine Reihe von Sicherheitsmechanismen zum Schutz der Daten und Infrastruktur.  
 
-Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherheit, Performance, Skalierbarkeit, Wartbarkeit und Dokumentation**.
+Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherheit, Performance, Skalierbarkeit, Wartbarkeit, Testabdeckung und Dokumentation**.
 
 ---
 
@@ -38,7 +38,7 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 
 ---
 
-## **3. Sicherheit**
+## **3. Sicherheit**  
 **Bewertung: ★★★★★ (5/5)**  
 
 ✔ **API-Schutz:**  
@@ -64,7 +64,7 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 **Bewertung: ★★★★☆ (4/5)**  
 
 ✔ **Effiziente Architektur:**  
-- **Asynchrone API-Anfragen**, um parallele Datenabrufe zu ermöglichen.  
+- **Flask als API-Framework**, das leicht skalierbar ist.  
 - **Caching** zur Reduktion redundanter Web-Anfragen und Verbesserung der Antwortzeiten.  
 - Nutzung von **SQLite**, das für kleine bis mittlere Datenmengen gut geeignet ist.  
 
@@ -72,6 +72,7 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 - **Selenium kann ressourcenintensiv sein**, insbesondere bei hohem Anfragevolumen.  
 - SQLite könnte bei **großer Datenlast** eine Limitierung darstellen (möglicher Wechsel zu PostgreSQL oder MySQL).  
 - **Task-Planung könnte von Threading oder einer Queue-Verarbeitung profitieren**, um Skalierbarkeit zu verbessern.  
+- **Flask arbeitet synchron**, eine zukünftige Erweiterung mit `asyncio` und `aiohttp` könnte die Performance weiter steigern.  
 
 ✅ **Fazit:** Die aktuelle Performance ist für **mittelgroße Datenmengen optimiert**, aber für **große und verteilte Systeme** könnte eine Anpassung der Architektur erforderlich sein.  
 
@@ -104,26 +105,36 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 
 ✔ **Automatisierte Testausführung:**  
 - Nutzung von **unittest** für konsistente Tests.  
-- Möglichkeit, Tests mit `python -m unittest discover tests` automatisiert auszuführen.  
+- Tests können mit folgendem Befehl ausgeführt werden:  
+```sh
+python -m unittest discover tests
+```
+**Die Konsolenausgabe zeigt ein Beispiel für eine Testausführung. Die Warnungen über unsichere CSS-Selektoren sind Teil der Sicherheitsprüfung und bestätigen, dass die Schutzmechanismen aktiv sind.**
+```sh
+(base) PS F:\webscrawler> python -m unittest discover tests
+.......2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: script
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: body { background: url(javascript:alert('XSS')) }
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onclick*=alert]
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div { expression(alert('XSS')) }
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[style=expression(alert('XSS'))]
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onclick=alert('XSS')]
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div { background: data:image/png;base64,abcd }
+2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onmouseover=alert('XSS')]
+2025-03-09 14:43:19,239 - WARNING - Unsicherer CSS-Selektor erkannt: @import url('http://evil.com');
+...2025-03-09 14:43:19,240 - INFO - Verarbeitungsfunktion 'process_data' erfolgreich aus './test_processing.py' geladen.
+.2025-03-09 14:43:19,241 - INFO - Inhalt erfolgreich in Datei '.\test.txt' gespeichert.
+.
+----------------------------------------------------------------------
+Ran 12 tests in 0.011s
 
+OK
+(base) PS F:\webscrawler>
+```
 ✅ **Fazit:** Sehr gute Testabdeckung mit Fokus auf **Sicherheits-, Integrations- und Funktionstests**.  
 
 ---
 
-## **7. Dokumentation & Benutzerfreundlichkeit**  
-**Bewertung: ★★★★★ (5/5)**  
-
-✔ **Vollständige & strukturierte README:**  
-- **Klare Installationsanleitung** (inkl. Abhängigkeiten und virtuelle Umgebung).  
-- **Detaillierte Nutzungshinweise für API, Kommandozeilenmodus und geplante Tasks**.  
-- **Fehlersuche & Troubleshooting-Tipps** erleichtern die Problembehandlung.  
-- **Erweiterungsvorschläge für zukünftige Entwicklungen**.  
-
-✅ **Fazit:** Die Dokumentation ist umfassend und macht die Software **leicht verständlich und nutzbar**.  
-
----
-
-## **8. Fazit & Gesamtbewertung**  
+## **7. Fazit & Gesamtbewertung**  
 ### **Gesamtbewertung: 4,9 / 5 Sterne ⭐⭐⭐⭐⭐**  
 
 | Kriterium                | Bewertung (1-5) |  
@@ -135,15 +146,4 @@ Diese Bewertung analysiert die Software hinsichtlich **Funktionalität, Sicherhe
 | **Testabdeckung**        | ⭐⭐⭐⭐⭐ (5/5)    |  
 | **Dokumentation**        | ⭐⭐⭐⭐⭐ (5/5)    |  
 
-**Stärken:**  
-✅ **Umfangreiche Features** für Web-Scraping & API-Management.  
-✅ **Hohe Sicherheit** durch Path Traversal-Schutz, API-Keys & Input-Validierung.  
-✅ **Gut strukturierter Code** mit Modularisierung & YAML-Konfiguration.  
-✅ **Ausgezeichnete Testabdeckung** für Zuverlässigkeit.  
-✅ **Sehr gute Dokumentation** mit umfassenden Anleitungen.  
-
-**Verbesserungspotenziale:**  
-- **Optimierung der Skalierbarkeit** für große Datenmengen (z. B. durch alternative Datenbanksysteme und parallele Verarbeitung).  
-
-### **Empfehlung:**  
-Dieses Programm ist **sehr professionell aufgebaut** und eignet sich ideal für **mittelgroße bis große Web-Scraping-Projekte mit API-Integration**. Es erfüllt **höchste Sicherheitsstandards** und bietet eine **skalierbare, erweiterbare Architektur** für zukünftige Entwicklungen.
+✅ **Empfehlung:** Diese Software ist **hochwertig, sicher und flexibel** und eignet sich ideal für **mittelgroße bis große Web-Scraping-Projekte mit API-Integration**. 🚀
