@@ -698,8 +698,15 @@ def extract_data_css(html_content, css_selectors_json):
 
     return extracted_data
 
-def save_content_to_file(content, filename):
+def save_content_to_file(content, url, filename_prefix):  # URL wird jetzt übergeben
     try:
+        # Sanitize die URL, um sie als Dateinamen zu verwenden
+        url_path = urlparse(url).path
+        filename_suffix = re.sub(r'[^a-zA-Z0-9_.-]', '_', url_path)  # Ersetze ungültige Zeichen durch _
+        if not filename_suffix:
+             filename_suffix = "_root" # Wenn Pfad leer ist
+
+        filename = f"{filename_prefix}{filename_suffix}.txt" #Präfix hinzugefügt
         filename_sanitized = os.path.basename(filename)
         filepath = os.path.join(".", filename_sanitized)
         with open(filepath, 'w', encoding='utf-8') as file:
@@ -805,7 +812,7 @@ def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None
                 filename = f"{domain_name}_html.txt"
                 content_to_save_file = webpage_content
             if content_to_save_file:
-                if save_content_to_file(content_to_save_file, filename):
+                if save_content_to_file(content_to_save_file, url, domain_name + "_"): #URL jetzt übergeben
                     logging.info(f"Inhalt für URL '{url}' zusätzlich in Datei '{filename}' gespeichert (geplanter Task ID: {task_id}).")
                 else:
                     error_message = "Fehler beim Speichern in Datei"
@@ -813,7 +820,6 @@ def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None
             else:
                 error_message = "Kein Inhalt zum Speichern in Datei"
                 logging.error(f"Kein Inhalt zum Speichern in Datei vorhanden für URL '{url}' (geplanter Task ID: {task_id}).")
-
     else:
         error_message = "Abrufen des Webseiteninhalts fehlgeschlagen"
         end_time = datetime.datetime.now()
@@ -1182,7 +1188,7 @@ def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_
             if save_file_cli:
                 filename = f"{domain_name}_{'text' if extract_text_only else 'html'}.txt"
                 content_to_save_file = text_content if extract_text_only else webpage_content
-                save_content_to_file(content_to_save_file, filename)
+                save_content_to_file(content_to_save_file, url, domain_name + "_")#URL jetzt übergeben
                 response_data["file_status"] = "success"
                 response_data["filename"] = filename
             if processed_content:
@@ -1289,7 +1295,7 @@ def run_command_line_scraping(args):
             filename = f"{domain_name}_{'text' if extract_text_only else 'html'}.txt"
             content_to_save_file = text_content if extract_text_only else webpage_content
             if content_to_save_file:
-                if save_content_to_file(content_to_save_file, filename):
+                if save_content_to_file(content_to_save_file, url, domain_name + "_"): # URL jetzt übergeben
                     pass
                 else:
                     logging.error("Fehler beim Speichern des Inhalts in Datei.")
