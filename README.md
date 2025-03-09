@@ -145,8 +145,16 @@ def process_data(data: dict) -> dict:
 🔐 **Alle API-Endpunkte erfordern API-Authentifizierung!**
 
 ---
+**Weboberfläche**
+```sh
+streamlit run app.py -- --streamlit
+```
 
-## 🏁 **8. WebCrawler-Pro**
+![image](https://github.com/user-attachments/assets/d2b6b9aa-ebaa-4450-8870-0096207fb2e1)
+
+---
+
+## 🏁 **9. WebCrawler-Pro**
 ✅ **Automatisierte Task-Planung direkt aus der Datenbank**
 ✅ **Erweiterbare Datenverarbeitung durch `processing.py`**
 ✅ **Detaillierte Logging- & Sicherheitsmaßnahmen**
