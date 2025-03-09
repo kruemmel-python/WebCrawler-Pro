@@ -755,6 +755,7 @@ def load_processing_function(function_path):
 def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None, css_selectors_cli=None, save_file_cli=False, processing_function_path=None, task_id=None):
     start_time = datetime.datetime.now()
     error_message = None
+    status = "pending"  # Initialer Status    
 
     logging.info(f"Starte geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {start_time.isoformat()}")
     update_scheduled_task_running_status_db(task_id, 'running')
@@ -985,7 +986,7 @@ def api_scheduled_tasks():
         except ValidationError as e:
             return handle_validation_error(e)
 
-        task_data_dict = task_payload.dict()
+        task_data_dict = task_payload.model_dump()
         task_data_dict['id'] = str(uuid.uuid4())
 
         if save_scheduled_task_to_db(task_data_dict):
@@ -1268,8 +1269,11 @@ def run_command_line_scraping(args):
 
         content_to_save_db = text_content if extract_text_only else webpage_content
         if save_to_db(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, processed_content):
+            status = "success"
             logging.info("Inhalt und strukturierte Daten erfolgreich in Datenbank gespeichert (mit optionaler Datenverarbeitung).")
         else:
+            error_message = "Fehler beim Speichern in Datenbank"
+            status = "failure - db save error"
             logging.error("Fehler beim Speichern in die Datenbank.")
 
         if css_data:
@@ -1290,7 +1294,10 @@ def run_command_line_scraping(args):
             else:
                 logging.error("Kein Inhalt zum Speichern in Datei vorhanden.")
     else:
+        error_message = "Abrufen des Webseiteninhalts fehlgeschlagen"
+        status = "failure - fetch error"
         logging.error("Abrufen des Webseiteninhalts fehlgeschlagen.")
+    logging.info(f"Beende geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {datetime.datetime.now().isoformat()}. Status: {status}, Fehler: {error_message if error_message else 'Kein Fehler'}")    
 
 def apply_processing_function(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, css_data, processing_function_path):
     processed_content = None
@@ -1373,13 +1380,20 @@ def run_streamlit():
 
                 # Task sofort ausführen
                 if st.button(f"Task {task['id']} sofort ausführen"):
-                    result = api_run_scheduled_task_by_id(task['id']) # result auffangen
-                    if result.status_code == 202:  # Ausführung gestartet
-                        st.success("Task wird ausgeführt.")
-                        st.rerun()  # Hier ist es korrekt
-                    else:
-                        st.error(f"Fehler beim Starten des Tasks: {result.json().get('message', 'Unbekannter Fehler')}") # Fehler anzeigen
+                    # FALSCH: result = api_run_scheduled_task_by_id(task['id'])
+                    # RICHTIG:  Den API-Endpunkt simulieren, ohne den Flask-Kontext zu benötigen.
+                    url = task['url']
+                    extract_text_only = bool(task.get('text_only', False))
+                    custom_stopwords_cli = task.get('stopwords')
+                    css_selectors_cli = task.get('css_selectors')
+                    save_file_cli = bool(task.get('save_file', False))
+                    processing_function_path = task.get('processing_function_path')
+                    threading.Thread(target=scrape_and_store_url, args=(url, extract_text_only, custom_stopwords_cli, css_selectors_cli, save_file_cli, processing_function_path, task['id'])).start()
 
+
+
+                st.success("Task wird ausgeführt.")
+                st.rerun()  # Hier ist es korrekt
     else:
         st.info("Keine geplanten Tasks gefunden.")
 
@@ -1404,7 +1418,7 @@ def run_streamlit():
                 st.error(str(e)) # Fehler anzeigen
                 return
 
-            task_data = task_payload.dict()
+            task_data = task_payload.model_dump()
             task_data['id'] = str(uuid.uuid4())
 
             if save_scheduled_task_to_db(task_data):
