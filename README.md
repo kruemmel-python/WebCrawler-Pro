@@ -1,280 +1,429 @@
-# 🚀 **WebCrawler-Pro**
+# 🚀 WebCrawler-Pro – Dokumentation und Bedienungsanleitung
 
-## 📌 **Einführung**
-WebCrawler-Pro ist ein leistungsstarkes Werkzeug zur **automatischen Extraktion, Verarbeitung und Bereitstellung von Web-Daten** über eine API. Es kombiniert **Web-Scraping, Datenverarbeitung, API-Integration, Sicherheit und Task-Planung** in einem einzigen System. Die geplante Task-Ausführung und das Monitoring erfolgen direkt über die Datenbank.  Zusätzlich bietet WebCrawler-Pro eine **intuitive Web-Oberfläche mit Streamlit**, um geplante Tasks komfortabel zu verwalten.
+## 1. Einleitung
 
-### 🔹 **Hauptfunktionen**
-✅ **Web-Scraping mit Selenium** (automatisiertes Abrufen von Webseiteninhalten)
-✅ **Gezielte Datenextraktion mit CSS-Selektoren** (inkl. Typkonvertierung & Datenbereinigung)
-✅ **Datenverarbeitung mit benutzerdefinierten Funktionen** (`processing.py`)
-✅ **RESTful API zur Bereitstellung der Daten** (mit detaillierten Fehlermeldungen)
-✅ **Automatisierte Task-Planung aus der Datenbank** (mit Monitoring & manueller Ausführung über die API)
-✅ **API-Authentifizierung per API-Key** 🔑
-✅ **Ratenbegrenzung zum Schutz vor Missbrauch** 🛡️
-✅ **Caching zur Leistungssteigerung** ⚡
-✅ **Datenbankintegration mit SQLite** 🗄️ (mit Transaktionssicherheit)
-✅ **Erweiterbare Sicherheitsmaßnahmen gegen Path Traversal & CSS-Injection**
-✅ **Monitoring für geplante Tasks und API-Status über API-Endpunkte** 📊 (inkl. Start-/Endzeiten, Logs, Fehlerberichte, letzter/nächster Ausführungszeit)
-✅ **Einfache Konfiguration über YAML-Dateien & Umgebungsvariablen** ⚙️
-✅ **Web-Oberfläche mit Streamlit zur Taskverwaltung** 🖥️
+**WebCrawler-Pro** ist ein vielseitiges und leistungsstarkes Programm zum automatisierten Extrahieren von Webinhalten. Es ermöglicht das Abrufen von HTML- und Textinhalten von Webseiten, die Extraktion strukturierter Daten mithilfe von CSS-Selektoren, die Keyword-Analyse und die optionale benutzerdefinierte Verarbeitung der gewonnenen Daten. WebCrawler-Pro bietet eine flexible Nutzung über die Kommandozeile, eine programmatische API und eine intuitive Streamlit-basierte Admin-Oberfläche.
 
-📖 Diese Dokumentation beschreibt die **Installation, Konfiguration und Nutzung** des Programms.
+**🎯 Zweck:**
 
----
+*   ✅ Automatisierte Datenerfassung aus dem Web für Forschungszwecke, Marktanalysen, Content-Aggregation und mehr.
+*   ⏱️ Regelmäßige Überwachung von Webseiteninhalten durch zeitgesteuerte Tasks.
+*   🌐 Bereitstellung einer API für den Zugriff auf Web-Scraping-Funktionalitäten in anderen Anwendungen.
+*   🖥️ Einfache Verwaltung und Überwachung geplanter Web-Scraping-Aufgaben über eine Web-Oberfläche.
 
-## 🔧 **1. Installation**
-### 📂 **1.1 Voraussetzungen**
-📌 **Erforderliche Software:**
-- 🐍 **Python 3.7 oder höher** *(empfohlen: 3.9+)*
-- 📦 **pip** *(Python-Paketmanager, sollte mit Python installiert sein)*
-- 🌐 **Google Chrome + ChromeDriver** *(für Selenium-basiertes Scraping)*
-- 🧠 **NLTK Data:** *(Für Keyword-Extraktion: `python -m nltk.downloader stopwords`)*
-- 🖥️ **Streamlit:** *(Für die Web-Oberfläche: `pip install streamlit`)*
+**👥 Zielgruppe:**
 
-### 📥 **1.2 Abhängigkeiten installieren**
-Führe folgenden Befehl aus, um alle benötigten Pakete zu installieren:
+*   📊 Datenanalysten und Wissenschaftler, die große Mengen an Webinhalten für ihre Analysen benötigen.
+*   🧑‍💻 Softwareentwickler, die Web-Scraping-Funktionalitäten in ihre Anwendungen integrieren möchten.
+*   📢 Content-Manager und Marketingexperten, die Webinhalte überwachen und analysieren müssen.
+*   🛠️ Technische Anwender, die eine flexible und konfigurierbare Lösung für Web-Scraping suchen.
+
+## 2. Systemanforderungen
+
+Um WebCrawler-Pro nutzen zu können, müssen folgende Systemvoraussetzungen erfüllt sein:
+
+**💻 Hardware:**
+
+*   **Prozessor:** Intel Core i3 oder vergleichbarer Prozessor (empfohlen: Intel Core i5 oder besser)
+*   **Arbeitsspeicher:** Mindestens 4 GB RAM (empfohlen: 8 GB RAM oder mehr, insbesondere für umfangreiche Scraping-Aufgaben und den API-Betrieb)
+*   **Festplattenspeicher:** Mindestens 1 GB freier Festplattenspeicher für die Programminstallation und die Datenbank (der benötigte Speicherplatz kann je nach Umfang der gescrapten Daten variieren)
+
+**💾 Software:**
+
+*   **Betriebssystem:** Windows 10 oder höher, macOS 10.15 oder höher, Linux (getestet auf Ubuntu 20.04 und neuer)
+*   **Python:** Python 3.8 oder höher (empfohlen: Python 3.9 oder 3.10). Stellen Sie sicher, dass Python und `pip` im Systempfad verfügbar sind.
+*   **Webbrowser:** Google Chrome (für den Betrieb mit Selenium). Es wird empfohlen, die aktuellste stabile Version von Chrome zu verwenden.
+*   **ChromeDriver:** Der zu Ihrer Chrome-Version passende ChromeDriver wird automatisch durch `webdriver-manager` installiert.
+
+**🐍 Python Bibliotheken:**
+
+Die folgenden Python-Bibliotheken sind für den Betrieb von WebCrawler-Pro erforderlich und werden in der Regel bei der Installation automatisch installiert:
+
+*   `streamlit`
+*   `pandas`
+*   `beautifulsoup4`
+*   `selenium`
+*   `webdriver_manager`
+*   `flask`
+*   `sqlite3`
+*   `nltk`
+*   `pyyaml`
+*   `pydantic`
+*   `python-dotenv`
+
+## 3. Installation
+
+Folgen Sie diesen Schritten, um WebCrawler-Pro zu installieren:
+
+**Schritt 1: Python installieren**
+
+Laden Sie die aktuelle Version von Python 3.x von der offiziellen Python-Webseite ([https://www.python.org/downloads/](https://www.python.org/downloads/)) herunter und installieren Sie diese. Achten Sie darauf, bei der Installation die Option "Add Python to PATH" zu aktivieren.
+
+**Schritt 2: Projektdateien herunterladen**
+
+Laden Sie die Projektdateien von WebCrawler-Pro herunter und entpacken Sie das Archiv in einen lokalen Ordner.
+
+**Schritt 3: Virtuelle Umgebung erstellen (empfohlen)**
+
+Navigieren Sie im Terminal/Eingabeaufforderung in den Projektordner und erstellen Sie eine virtuelle Umgebung:
+
 ```bash
-pip install -r requirements.txt
+python -m venv venv
 ```
 
+Aktivieren Sie die virtuelle Umgebung:
 
----
+*   **Windows (Eingabeaufforderung):** `venv\Scripts\activate`
+*   **Windows (PowerShell):** `venv\Scripts\Activate.ps1`
+*   **macOS/Linux:** `source venv/bin/activate`
 
-## ⚙️ **2. Konfiguration**
-Das Programm wird über **YAML-Dateien & Umgebungsvariablen** konfiguriert:
-- 📄 **`config.yaml`** → Enthält Einstellungen für Scraping, API, Datenbank & Sicherheit.
-- 🔑 **`.env` Datei** → Speichert API-Keys & andere sensible Informationen. *(Umgebungsvariablen haben Vorrang vor `config.yaml`.)*  API-Keys können auch direkt in `config.yaml` unter `api_keys` eingetragen werden.
+**Schritt 4: Bibliotheken installieren**
 
-### 🛠 **2.1 `config.yaml` (Beispiel)**
-```yaml
-scraping:
-  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-  timeout: 10
+Installieren Sie die benötigten Python-Bibliotheken:
 
-database:
-  type: sqlite
-  path: "data/webcrawler.db"
-
-security:
-  api_key_required: true
-  rate_limit: 100
+```bash
+pip install streamlit pandas beautifulsoup4 selenium webdriver-manager flask pyyaml pydantic nltk python-dotenv
 ```
 
-### 🔑 **2.2 `.env` Datei (Beispiel)**
-```ini
-API_KEY_1=mein_geheimer_api_key_1
-API_KEY_2=mein_geheimer_api_key_2
-API_KEY_3=mein_geheimer_api_key_3
+**Schritt 5: Konfiguration anpassen (optional)**
+
+Passen Sie die `config.yaml` Datei bei Bedarf an. Wichtige Optionen:
+
+*   `database_file`
+*   `api_keys` (oder Umgebungsvariablen verwenden)
+*   `rate_limit_requests_per_minute`
+*   `cache_expiry_seconds`
+*   `selenium_config`
+*   `allowed_css_properties`
+*   `processing_functions_dir`
+*   `log_level`
+
+**Schritt 6: ChromeDriver Installation**
+
+ChromeDriver wird automatisch von `webdriver-manager` installiert.
+
+**Schritt 7: Installation abschließen**
+
+WebCrawler-Pro ist nun installiert.
+
+### 3.1 API-Keys über Umgebungsvariablen konfigurieren 🔑
+
+Erstellen Sie eine `.env` Datei im Projektordner und fügen Sie API-Keys hinzu:
+
+```dotenv
+API_KEY_1=IhrErsterAPIKey
+API_KEY_2=IhrZweiterAPIKey
+API_KEY_3=IhrDritterAPIKey
 ```
 
----
+### 3.2 Fehlerbehebung bei der Installation 🛠️
 
-## ▶️ **3. Nutzung**
-### 🌍 **3.1 API-Modus** *(Startet den API-Server)*
+Siehe vollständige Dokumentation für detaillierte Fehlerbehebungshinweise.
+
+## 4. Benutzerführung
+
+WebCrawler-Pro kann über Kommandozeile, Web-API oder Streamlit Admin-Oberfläche verwendet werden.
+
+### 4.1 Kommandozeilenmodus ⌨️
+
+Navigieren Sie zum Projektordner und aktivieren Sie die virtuelle Umgebung.
+
+**Grundlegende Nutzung:**
+
+```bash
+python app.py <URL>
+```
+
+**Optionale Argumente:**
+
+*   `--text`
+*   `--save-file`
+*   `--stopwords <Stopwörter>`
+*   `--css-selectors <JSON-String>`
+*   `--processing-function <Pfad>`
+*   `--api`
+*   `--streamlit`
+
+**Beispiele:**
+
+*   `python app.py --text https://www.example.com`
+*   `python app.py --save-file --stopwords "zusätzlich,weiteres" https://www.example.com`
+*   `python app.py --css-selectors '{"title": "h1", "paragraph": "p"}' https://www.example.com`
+*   `python app.py --processing-function custom_processing.py https://www.example.com`
+*   `python app.py --api`
+*   `python app.py --streamlit`
+*   `python app.py` (für Scheduled Mode)
+
+### 4.2 Web-API 🌐
+
+Starten Sie die API:
+
 ```bash
 python app.py --api
 ```
 
-### 🕵️ **3.2 Kommandozeilenmodus** *(Einzelnes Scraping ausführen)*
+API ist unter `http://localhost:5000` erreichbar.
+
+**Authentifizierung:** API-Key im `X-API-Key` Header erforderlich (außer `/api/v1/health`).
+
+**Rate Limiting & Caching:** Aktiv. Konfigurierbar in `config.yaml`.
+
+**API Endpunkte:**
+
+*   `/api/v1/` (GET) - API Übersicht
+*   `/api/v1/fetch-html` (GET) - HTML Inhalt abrufen
+*   `/api/v1/fetch-text` (GET) - Text Inhalt abrufen
+*   `/api/v1/fetch-links` (GET) - Links extrahieren
+*   `/api/v1/scheduled-tasks` (GET, POST) - Geplante Tasks verwalten (Liste, Erstellen)
+*   `/api/v1/scheduled-tasks/<task_id>` (GET, PUT, DELETE) - Geplante Tasks verwalten (Details, Aktualisieren, Löschen)
+*   `/api/v1/scheduled-tasks/status` (GET) - Task Status Übersicht
+*   `/api/v1/scheduled-tasks/<task_id>/status` (GET) - Task Detail Status
+*   `/api/v1/scheduled-tasks/<task_id>/run` (POST) - Task manuell ausführen
+*   `/api/v1/health` (GET) - Health Check (kein API-Key benötigt)
+
+**Beispiele für API-Anfragen:**
+
+**Linux/macOS (curl):**
+
 ```bash
-python app.py https://example.com [Optionen]
+curl -X GET \
+  'http://localhost:5000/api/v1/fetch-text?url=https://www.example.com&stopwords=example,test&css_selectors={"title": "h1"}' \
+  -H 'X-API-Key: IhrAPIKey'
 ```
 
-### ⏳ **3.3 Geplanter Modus** *(Automatische Tasks aus der Datenbank ausführen)*
+**Windows (PowerShell - Invoke-WebRequest):**
+
+```powershell
+$API_KEY = "IhrAPIKey" # Ersetzen Sie dies mit Ihrem API-Key
+$API_HOST = "http://localhost:5000"
+
+$response = Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-text?url=https://www.example.com&stopwords=example,test&css_selectors={\"title\": \"h1\"}" `
+    -Headers @{'X-API-Key' = $API_KEY}
+
+# Antwortinhalt als JSON ausgeben (optional)
+$response.Content | ConvertFrom-Json
+```
+
+**Weitere Windows/PowerShell Beispiele (Invoke-WebRequest):**
+
+*   **Links von einer Webseite abrufen:**
+
+    ```powershell
+    $API_KEY = "IhrAPIKey"
+    $API_HOST = "http://localhost:5000"
+    $BASE_URL = "https://www.example.com"
+
+    $links_response = Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-links?url=$BASE_URL" `
+        -Headers @{'X-API-Key' = $API_KEY} | ConvertFrom-Json
+
+    # Links ausgeben (optional)
+    $links_response.data.links
+    ```
+
+*   **HTML-Inhalt abrufen und in Datei speichern:**
+
+    ```powershell
+    $API_KEY = "IhrAPIKey"
+    $API_HOST = "http://localhost:5000"
+    $URL_TO_FETCH = "https://www.example.com"
+
+    Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-html?url=$URL_TO_FETCH&save_file=true" `
+        -Headers @{'X-API-Key' = $API_KEY}
+    ```
+
+### 4.3 Streamlit Admin-Oberfläche 🖥️
+
+Starten Sie die Admin-Oberfläche:
+
 ```bash
-python app.py
-```
-📌 **Hinweis:** Geplante Tasks werden aus der Datenbank (`webdata.db`, konfigurierbar in `config.yaml`) geladen und ausgeführt. 
----
-
-
-## 🛠 **4. Benutzerdefinierte Datenverarbeitung (`processing.py`)**
-📌 **Ermöglicht benutzerdefinierte Verarbeitung gescrapter Daten.**
-
-**Beispiel:**
-```python
-def process_data(data: dict) -> dict:
-    """
-    Verarbeitet gescrapte Daten. Muss ein Dictionary zurückgeben.
-    Falls `None` zurückgegeben wird, erscheint eine Warnung im Log.
-    """
-    if not isinstance(data, dict):
-        return None
-
-    processed_data = {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}
-    return processed_data
+python app.py --streamlit
 ```
 
----
+Zugriff über `http://localhost:8501`.
 
-## 🔒 **5. Sicherheitshinweise**
-📌 **Schutzmechanismen:**
-- 🔑 **API-Key-Authentifizierung** *(API-Endpunkte erfordern einen API-Key im Header)*
-- 🛡 **Ratenbegrenzung** *(Maximal 100 Anfragen pro Minute, konfigurierbar in `config.yaml`)*
-- 🚨 **Path Traversal-Schutz** *(Verhindert unautorisierten Zugriff auf Dateien)*
-- 🔍 **CSS-Selektor-Validierung** *(Unsichere Selektoren werden ignoriert & protokolliert)*
+**Benutzeroberfläche:**
 
-**Beispiel für ein Sicherheitslog:**
-```sh
-2025-03-09 14:43:19,238 - WARNING - Unsicherer CSS-Selektor erkannt: div[onclick*=alert]
-```
+1.  **API-Key Eingabe** 🔑
+2.  **Geplante Tasks Übersicht** 📝 (mit Details und Aktionen)
+3.  **Neuen Task hinzufügen**➕ (Formular)
 
----
+**Bedienungshinweise:**
 
-## 📊 **6. Fehlerbehandlung & Logging**
-📌 **Wo werden Fehler protokolliert?**
-- 🖥 **Konsolenausgabe** *(Standard, für schnelle Fehleranalyse)*
-- 🗂 **Log-Datei `logs/webcrawler.log`** *(falls aktiviert)*
+*   API-Key zu Beginn eingeben.
+*   "Geplante Tasks" Übersicht für Task-Management.
+*   "Neuen Task hinzufügen" für neue Tasks.
+*   Zeitpläne und CSS-Selektoren korrekt formatieren.
+*   Seite wird nach Task-Änderungen neu geladen.
 
-**Log-Level:**
-- ✅ **INFO** → Allgemeine Statusmeldungen
-- ⚠️ **WARNING** → Sicherheitswarnungen
-- ❌ **ERROR** → Kritische Fehler
+## 5. Funktionsbeschreibung
 
+### 5.1 Geplante Tasks erstellen (API und Admin-Oberfläche) ➕📝
 
-## 📡 7. API-Endpunkte
-📌 **Übersicht der wichtigsten API-Endpunkte (aktualisiert):**
-- 🌐 `/api/v1/` → API Root mit Übersicht aller Endpunkte
-- 📄 `/api/v1/fetch-html` → HTML-Inhalt abrufen (Parameter: `url`, `stopwords`, `css-selectors`, `save_file`, `processing_function_path`)
-- 📄 `/api/v1/fetch-text` → Textinhalt abrufen (Parameter: `url`, `stopwords`, `css-selectors`, `save_file`, `processing_function_path`)
-- 🔄 `/api/v1/scheduled-tasks` → Aufgabenverwaltung (GET, POST, PUT, DELETE)
-- 🔄 `/api/v1/scheduled-tasks/<task_id>` → Einzelne Task verwalten (GET, PUT, DELETE)
-- 📊 `/api/v1/scheduled-tasks/status` → Status aller geplanten Tasks
-- 📊 `/api/v1/scheduled-tasks/<task_id>/status` → Status eines spezifischen Tasks  (inkl. letzter/nächster Ausführungszeit und Fehlermeldungen)
-- 📊 `/api/v1/scheduled-tasks/<task_id>/run` → Manuelles Ausführen eines Tasks
-- ✅ `/api/v1/health` → API Health Check
+**Request Body (JSON) für API Task-Erstellung:**
 
-
-🔐 **Alle API-Endpunkte erfordern API-Authentifizierung!**
-
----
-## **Weboberfläche**
-
-Mit dem Befehl `streamlit run app.py -- --streamlit` starten Sie die Weboberfläche zur bequemen Verwaltung Ihrer Webcrawling-Tasks.  Sie benötigen hierfür einen gültigen API-Key.
-
-**API-Key Eingabe:**
-
-Nach dem Start der Weboberfläche werden Sie aufgefordert, Ihren API-Key einzugeben.  Dieser dient zur Authentifizierung und Autorisierung des Zugriffs auf die Funktionen der Weboberfläche. Geben Sie Ihren API-Key in das dafür vorgesehene Feld ein und bestätigen Sie mit Enter. Ein ungültiger API Key führt zu einer Fehlermeldung.
-
-**Anzeige geplanter Tasks:**
-
-Die Weboberfläche listet alle geplanten Tasks übersichtlich auf. Für jeden Task werden folgende Informationen angezeigt:
-
-* **Task ID:** Eindeutige Identifikationsnummer des Tasks.
-* **URL:** Die zu crawlende Webseite.
-* **Zeitplan:**  Definiert, wann der Task ausgeführt wird (z.B. stündlich, täglich um 10:00, alle 30 Minuten).
-* **Nur Text:**  Gibt an, ob nur der Textinhalt oder der gesamte HTML-Code extrahiert werden soll.
-* **Stopwörter:**  Auflistung der Stopwörter, die bei der Keyword-Extraktion ignoriert werden.
-* **CSS-Selektoren:**  Die verwendeten CSS-Selektoren zur gezielten Datenextraktion.
-* **Datei speichern:**  Gibt an, ob die extrahierten Daten zusätzlich zur Datenbank in einer Datei gespeichert werden sollen.
-* **Verarbeitungsfunktion:**  Pfad zur benutzerdefinierten Verarbeitungsfunktion (optional).
-* **Status:**  Aktueller Status des Tasks (z.B. `pending`, `running`, `success`, `failure`).
-* **Letzte Ausführung:**  Zeitstempel der letzten Ausführung.
-* **Nächste Ausführung:**  Zeitstempel der nächsten geplanten Ausführung.
-* **Fehlermeldung:**  Anzeige von etwaigen Fehlermeldungen bei der Ausführung des Tasks.
-
-
-**Aktionen für jeden Task:**
-
-* **Löschen:**  Über den Button "Task [ID] löschen" kann ein geplanter Task entfernt werden.
-* **Sofort ausführen:** Mit dem Button "Task [ID] sofort ausführen" kann ein Task unabhängig vom Zeitplan manuell gestartet werden.  Der Status aktualisiert sich nach der Ausführung.
-
-**Hinzufügen eines neuen Tasks:**
-
-Im Bereich "Neuen Task hinzufügen" können Sie neue Crawling-Tasks erstellen.  Füllen Sie die folgenden Felder aus:
-
-* **URL:**  Die URL der zu crawlenden Webseite.
-* **Zeitplan:**  Definieren Sie den Ausführungszeitplan des Tasks. Gültige Formate sind: "stündlich", "täglich um HH:MM" oder "alle X minuten".
-* **Nur Text extrahieren:** Aktivieren Sie diese Option, um nur den Textinhalt der Webseite zu extrahieren.
-* **Stopwörter:**  Geben Sie optional eine kommagetrennte Liste von Stopwörtern ein.
-* **CSS-Selektoren:** Fügen Sie optional CSS-Selektoren im JSON-Format hinzu, um bestimmte Daten von der Webseite zu extrahieren.
-* **Datei speichern:**  Aktivieren Sie diese Option, um die extrahierten Daten in einer Datei zu speichern.
-* **Verarbeitungsfunktion:** Geben Sie optional den Pfad zu einer benutzerdefinierten Verarbeitungsfunktion an.
-
-
-Nach dem Ausfüllen der Felder klicken Sie auf "Task hinzufügen", um den neuen Task zu speichern und zu planen.  Die Weboberfläche aktualisiert sich automatisch und zeigt den neu hinzugefügten Task an.  Fehler bei der Eingabe werden direkt angezeigt.
-
-```
-```bash
-streamlit run app.py -- --streamlit
-```
-
-![image](https://github.com/user-attachments/assets/d2b6b9aa-ebaa-4450-8870-0096207fb2e1)
-
----
----
-## **Hier sind einige Beispieleingaben für die Streamlit-Weboberfläche deines WebCrawler-Pro**
-
-**Beispiel 1: Einfacher Webseiten-Crawl**
-
-* **URL:** `https://www.example.com`
-* **Zeitplan:** `täglich um 10:00`
-* **Nur Text extrahieren:** (deaktiviert)
-* **Stopwörter:**
-* **CSS-Selektoren:**
-* **Datei speichern:** (aktiviert)
-* **Verarbeitungsfunktion:**
-
-
-Dieser Task crawlt täglich um 10:00 Uhr die Webseite `https://www.example.com` und speichert den gesamten HTML-Inhalt in einer Datei.  Es werden keine Stopwörter, CSS-Selektoren oder Verarbeitungsfunktionen verwendet.
-
-**Beispiel 2: Text-Extraktion mit Stopwörtern**
-
-* **URL:** `https://www.wikipedia.org`
-* **Zeitplan:** `alle 60 minuten`
-* **Nur Text extrahieren:** (aktiviert)
-* **Stopwörter:** `und, die, der, das, ist`
-* **CSS-Selektoren:**
-* **Datei speichern:** (aktiviert)
-* **Verarbeitungsfunktion:**
-
-
-Dieser Task extrahiert stündlich den Textinhalt von `https://www.wikipedia.org`. Die angegebenen Stopwörter werden bei der Keyword-Extraktion ignoriert. Der extrahierte Text wird in einer Datei gespeichert.
-
-**Beispiel 3: Datenextraktion mit CSS-Selektoren**
-
-* **URL:** `https://www.amazon.de/`
-* **Zeitplan:** `stündlich`
-* **Nur Text extrahieren:** (deaktiviert)
-* **Stopwörter:**
-* **CSS-Selektoren:**
 ```json
 {
-  "product_title": "h2.a-size-mini a.a-link-normal span",
-  "product_price": "span.a-price span.a-offscreen"
+  "url": "https://www.example.com",
+  "schedule_time": "täglich um 08:00",
+  "text_only": false,
+  "stopwords": "example,test",
+  "css_selectors": "{\"title\": \"h1\"}",
+  "save_file": true,
+  "processing_function_path": "custom_processing.py"
 }
 ```
-* **Datei speichern:** (deaktiviert)
-* **Verarbeitungsfunktion:** `./PROCESSING_FUNCTIONS_DIR/#1 custom_processing.py`
 
+**Parameter:** `url`, `schedule_time`, `text_only`, `stopwords`, `css_selectors`, `save_file`, `processing_function_path`.
 
-Dieser Task crawlt stündlich Amazon und extrahiert Produkttitel und -preise mithilfe der angegebenen CSS-Selektoren. Die extrahierten Daten werden mit der angegebenen Verarbeitungsfunktion weiterverarbeitet und in der Datenbank gespeichert. Beachte, dass der Pfad zur Verarbeitungsfunktion relativ zum Ausführungsverzeichnis des Crawlers sein muss.
+### 5.2 Geplante Tasks aktualisieren (API und Admin-Oberfläche) 🔄📝
 
+**Request Body (JSON) für API Task-Aktualisierung:**
 
-**Beispiel 4:  Kombination aller Funktionen**
+```json
+{
+  "schedule_time": "stündlich",
+  "stopwords": "neue,stopwörter"
+}
+```
 
-* **URL:** `https://www.heise.de`
-* **Zeitplan:** `täglich um 06:00`
-* **Nur Text extrahieren:** (aktiviert)
-* **Stopwörter:** `mit, von, am, im`
-* **CSS-Selektoren:** `{"article_title": "h2 a"}`
-* **Datei speichern:** (aktiviert)
-* **Verarbeitungsfunktion:** `./PROCESSING_FUNCTIONS_DIR/#2 custom_processing.py` (oder ein anderer gültiger Pfad)
+**Parameter:** `task_id` (Pfadparameter), Request Body (JSON) mit zu aktualisierenden Feldern.
 
+### 5.3 Geplante Tasks löschen (API und Admin-Oberfläche) ❌📝
 
-Dieser Task kombiniert alle verfügbaren Funktionen. Er crawlt täglich um 6:00 Uhr heise.de, extrahiert den Textinhalt, filtert die angegebenen Stopwörter, extrahiert Artikeltitel mithilfe des CSS-Selektors, speichert den Textinhalt in einer Datei und verarbeitet die Daten mit der angegebenen Funktion.
+**Parameter:** `task_id` (Pfadparameter).
 
-**Wichtig:**
+### 5.4 Geplante Tasks manuell ausführen (API und Admin-Oberfläche) ▶️📝
 
-* **Gültige Pfade für Verarbeitungsfunktionen:** Achte darauf, dass die Pfade zu den Verarbeitungsfunktionen korrekt und relativ zum Ausführungsverzeichnis des Crawlers angegeben sind.  Die Beispiele oben gehen davon aus, dass sich die `custom_processing.py` Dateien im Verzeichnis `PROCESSING_FUNCTIONS_DIR` befinden.
-* **JSON-Format für CSS-Selektoren:** Die CSS-Selektoren müssen in einem gültigen JSON-Format angegeben werden.
-* **Testen:** Teste die Eingaben gründlich, um sicherzustellen, dass sie die gewünschten Ergebnisse liefern.
----
-## 🏁 **9. WebCrawler-Pro**
-✅ **Automatisierte Task-Planung direkt aus der Datenbank**
-✅ **Erweiterbare Datenverarbeitung durch `processing.py`**
-✅ **Detaillierte Logging- & Sicherheitsmaßnahmen**
-✅ **Einfache Konfiguration über `config.yaml` & `.env`**
+**Parameter:** `task_id` (Pfadparameter).
 
-🚀 **WebCrawler-Pro ist die ideale Lösung für produktives, sicheres und flexibles Web-Scraping!**
+### 5.5 Webseiteninhalt abrufen und extrahieren (API und Kommandozeile) 🌐➡️📄
+
+**Prozessablauf:**
+
+1.  URL-Validierung ✅
+2.  Cache-Prüfung 🗄️
+3.  Webseitenabruf (Selenium) 🌐
+4.  HTML-Parsing (Beautiful Soup) 🥣
+5.  Datenextraktion (Text, Titel, Meta-Description, H1-Headings, Keywords, CSS-Daten) 📄
+6.  Benutzerdefinierte Datenverarbeitung (optional) ⚙️
+7.  Datenbank-Speicherung 💾
+8.  Datei-Speicherung (optional) 🗂️
+9.  Antwortgenerierung (API) / Ausgabe (Kommandozeile) 📤
+
+### 5.6 Keyword-Extraktion 🔑🧮
+
+*   Textvorverarbeitung, Stopwortfilterung, alphabetische Filterung, Worthäufigkeitszählung, Top-N Keywords.
+
+### 5.7 CSS-Datenextraktion 🧱
+
+*   Einfache und konfigurierte Selektoren (mit `selector`, `type`, `cleanup`).
+*   Sicherheitsprüfung für CSS-Selektoren.
+
+### 5.8 Benutzerdefinierte Datenverarbeitung ⚙️
+
+*   `process_data(data)` Funktion in Python-Datei definieren.
+*   Pfad zur Datei in Programm/Task konfigurieren.
+*   Sicherheitswarnung beachten.⚠️
+
+## 6. Beispielhafte Anwendungsfälle
+
+*   Einmaliges Scrapen über Kommandozeile 🚀
+*   Regelmäßiges Scrapen mit geplantem Task ⏱️
+*   Extrahieren von Produktinformationen mit CSS-Selektoren 🛍️
+*   Datenanalyse mit benutzerdefinierter Processing-Funktion 📊
+*   Abrufen von Links über API 🔗
+
+## 7. Fehlerbehebung
+
+**Häufige Fehlermeldungen und Lösungen:**
+
+*   "Ungültige URL" ❌🌐
+*   "Webseiteninhalt konnte nicht abgerufen werden" ❌
+*   "API-Key fehlt oder ist ungültig." ❌🔑
+*   "Rate Limit überschritten. Bitte warten Sie eine Minute." ⏳
+*   "Ungültiges JSON-Format für CSS-Selektoren." ❌🧱
+*   "Ungültiger Pfad zur Processing-Funktion" ❌⚙️
+*   "Fehler beim Speichern in die Datenbank" ❌💾
+*   "Fehler in der Datenverarbeitungsfunktion" ❌⚙️
+*    "Kritischer Datenbankfehler im Scheduled Mode. Programm wird beendet." ☠️💾
+
+**Log-Level Konfiguration:**
+
+Konfigurierbar in `config.yaml` unter `log_level`.
+
+**Verfügbare Log-Level:**
+
+*   `DEBUG` (detaillierteste Protokollierung) 🐛
+*   `INFO` (Standard) ℹ️
+*   `WARNING` ⚠️
+*   `ERROR` ❌
+*   `CRITICAL` ☠️
+
+**Beispiel `config.yaml` für `DEBUG` Log-Level:**
+
+```yaml
+log_level: DEBUG
+```
+
+## 8. FAQ (Häufig gestellte Fragen)
+
+**F: Wie konfiguriere ich API-Keys?**
+
+A: API-Keys können in der `config.yaml` Datei unter `api_keys` als Liste von Strings oder sicherer über Umgebungsvariablen (siehe Abschnitt 3.1) konfiguriert werden.
+
+**F: Wie ändere ich das Rate Limit der API?**
+
+A: Das Rate Limit (maximale Anfragen pro Minute) kann in der `config.yaml` Datei unter `rate_limit_requests_per_minute` konfiguriert werden.
+
+**F: Wie lange werden Webseiten im Cache gespeichert?**
+
+A: Die Gültigkeitsdauer des Caches (in Sekunden) kann in der `config.yaml` Datei unter `cache_expiry_seconds` konfiguriert werden. Standardmäßig sind es 600 Sekunden (10 Minuten).
+
+**F: Wie kann ich geplante Tasks verwalten?**
+
+A: Geplante Tasks können über die Streamlit Admin-Oberfläche (empfohlen) oder über die Web-API verwaltet werden (erstellen, aktualisieren, löschen, auflisten, manuell ausführen, Status abrufen).
+
+**F: Wo werden die gescrapten Daten gespeichert?**
+
+A: Die gescrapten Daten werden in einer SQLite-Datenbank gespeichert. Der Pfad zur Datenbankdatei kann in der `config.yaml` Datei unter `database_file` konfiguriert werden.
+
+**F: Kann ich nur Textinhalte extrahieren?**
+
+A: Ja, Sie können nur Textinhalte extrahieren, indem Sie die Option `--text` in der Kommandozeile verwenden, `text_only=true` im Request Body für die API-Endpunkte `/fetch-html` und `/fetch-text` setzen oder die Checkbox "Nur Text extrahieren" in der Streamlit Admin-Oberfläche aktivieren.
+
+**F: Wie kann ich benutzerdefinierte Stopwörter verwenden?**
+
+A: Benutzerdefinierte Stopwörter können als kommagetrennte Liste über die Option `--stopwords` in der Kommandozeile, den Parameter `stopwords` in den API-Endpunkten `/fetch-html` und `/fetch-text` oder das Textfeld "Stopwörter" in der Streamlit Admin-Oberfläche angegeben werden.
+
+**F: Sind CSS-Selektoren sicher zu verwenden?**
+
+A: WebCrawler-Pro implementiert Sicherheitsprüfungen für CSS-Selektoren, um potenziell unsichere Selektoren zu erkennen und zu verhindern. Dennoch sollten Sie bei der Verwendung von CSS-Selektoren Vorsicht walten lassen und nur vertrauenswürdige Selektoren verwenden.
+
+**F: Sind benutzerdefinierte Processing-Funktionen sicher?**
+
+A: Benutzerdefinierte Processing-Funktionen können beliebigen Python-Code ausführen. Verwenden Sie diese Funktion nur mit Bedacht und stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen, um Sicherheitsrisiken zu vermeiden. WebCrawler-Pro validiert den Pfad zur Processing-Funktion, um unsichere Pfade zu verhindern.
+
+**F: Unterstützt WebCrawler-Pro JavaScript-Rendering?**
+
+A: Ja, WebCrawler-Pro verwendet Selenium und ChromeDriver, um Webseiten abzurufen, was das Rendering von JavaScript-Inhalten ermöglicht.
+
+## 9. Glossar
+
+*   **API (Application Programming Interface):** 🌐 Eine Schnittstelle, die es Softwareanwendungen ermöglicht, miteinander zu kommunizieren. Im Kontext von WebCrawler-Pro ermöglicht die API den programmatischen Zugriff auf Web-Scraping-Funktionalitäten.
+*   **CSS-Selektor:** 🧱 Ein Muster, das verwendet wird, um HTML-Elemente auf einer Webseite auszuwählen und zu formatieren oder Daten aus diesen Elementen zu extrahieren.
+*   **ChromeDriver:** 🌐 Ein separates ausführbares Programm, das von Selenium verwendet wird, um Chrome-Browser zu steuern.
+*   **JSON (JavaScript Object Notation):** 📄 Ein leichtgewichtiges Datenformat, das für den Datenaustausch im Web verwendet wird.
+*   **Rate Limiting:** ⏳ Eine Technik zur Begrenzung der Anzahl von Anfragen, die ein Benutzer oder eine Anwendung innerhalb eines bestimmten Zeitraums an eine API senden kann. Dies dient dem Schutz vor Überlastung und Missbrauch.
+*   **Caching:** 🗄️ Eine Technik zur Speicherung häufig abgerufener Daten (z.B. Webseiteninhalte) in einem temporären Speicher (Cache), um den Zugriff zu beschleunigen und die Last auf den ursprünglichen Datenquelle zu reduzieren.
+*   **Scheduled Task (Geplanter Task):** ⏱️📝 Eine Aufgabe, die automatisch zu einem vordefinierten Zeitpunkt oder in regelmäßigen Intervallen ausgeführt wird. Im Kontext von WebCrawler-Pro sind geplante Tasks Web-Scraping-Aufgaben, die automatisch nach Zeitplan ausgeführt werden.
+*   **Selenium:** 🌐 Ein Framework für die Automatisierung von Webbrowsern. WebCrawler-Pro verwendet Selenium, um Webseiten dynamisch abzurufen und JavaScript-Inhalte zu rendern.
+
+## 10. Kontakt und Support
+
+**E-Mail:** 📧 support@webcrawler-pro.example.com (Platzhalter E-Mail Adresse)
+
+**Webseite:** 🌐 www.webcrawler-pro.example.com (Platzhalter Webseite)
+
+Bitte beschreiben Sie Ihr Problem/Anfrage detailliert.
+
 
