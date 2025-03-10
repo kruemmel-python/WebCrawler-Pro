@@ -1283,6 +1283,49 @@ def api_run_scheduled_task_by_id(task_id):
 
     return create_api_response(message=f"Task '{task_id}' wird jetzt manuell ausgeführt.", status_code=202)
 
+
+@app.route('/api/v1/search-content', methods=['GET'])
+@require_api_key
+def api_search_content():
+    query = request.args.get('query')
+    search_field = request.args.get('search_field', 'url') # Standardmäßig URL durchsuchen
+
+    if not query:
+        return create_api_response(errors=["'query' Parameter fehlt"], message="'query' Parameter ist erforderlich für die Suche.", status_code=400)
+
+    allowed_search_fields = ['url', 'title', 'meta_description', 'text_content', 'domain']
+    if search_field not in allowed_search_fields:
+        return create_api_response(errors=[f"Ungültiges Suchfeld: '{search_field}'. Erlaubte Felder: {allowed_search_fields}"], message="Ungültiges Suchfeld.", status_code=400)
+
+    conn = None  # SQLite Verbindungsvariable definieren
+    cursor = None # Cursor Variable definieren
+    try:
+        conn = sqlite3.connect(DATABASE_FILE) # SQLite Verbindung herstellen (ersetzt SQLAlchemy Session)
+        cursor = conn.cursor() # Cursor erstellen
+
+        # Geänderte SQL-Abfrage: text_content hinzufügen
+        query_str = f"SELECT url, title, meta_description, domain, text_content FROM web_content WHERE {search_field} LIKE ?"
+        search_pattern = f"%{query}%" # LIKE pattern für SQLite
+        cursor.execute(query_str, [search_pattern]) # Query ausführen mit Cursor
+        results = cursor.fetchall() # Ergebnisse abrufen
+
+        search_result_list = []
+        for row in results:
+            search_result_list.append(
+                # text_content zum Dictionary hinzufügen
+                {"url": row[0], "title": row[1], "meta_description": row[2], "domain": row[3], "text_content": row[4]}
+            )
+        return create_api_response(data=search_result_list, message=f"Suchergebnisse für '{query}' in Feld '{search_field}' abgerufen.")
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback() # Rollback bei Fehler
+        logging.error(f"Datenbankfehler bei der Suche: {e}", exc_info=True)
+        return create_api_response(errors=["Datenbankfehler bei der Suche."], message="Fehler bei der Datenbankabfrage.", status_code=500)
+    finally:
+        if conn:
+            conn.close() # Verbindung schließen im finally-Block
+
+
 @app.route('/api/v1/fetch-html', methods=['GET'])
 @require_api_key
 def api_fetch_html():
@@ -1322,6 +1365,8 @@ def api_fetch_text():
     save_file_cli = save_file_param.lower() == 'true' if save_file_param else False
 
     return fetch_content_api(url_raw, stopwords_param, css_selectors_param_raw, processing_function_path, save_file_cli, extract_text_only=True)
+
+
 
 def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_function_path, save_file_cli, extract_text_only):
     logging.info(f"API Anfrage für {'Text' if extract_text_only else 'HTML'}-Inhalt von URL: {url}")
