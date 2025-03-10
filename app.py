@@ -1155,8 +1155,14 @@ def api_fetch_text():
 def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_function_path, save_file_cli, extract_text_only):
     logging.info(f"API Anfrage für {'Text' if extract_text_only else 'HTML'}-Inhalt von URL: {url}")
     webpage_content = fetch_webpage_content(url)
+    
     if webpage_content:
-        text_content = extract_text_content(webpage_content) if extract_text_only else None
+        # **Korrigierte Text-Extraktion**
+        text_content = extract_text_content(webpage_content) if extract_text_only else webpage_content
+
+        if extract_text_only and not text_content:
+            return create_api_response(errors=["Kein relevanter Text gefunden"], message="Kein relevanter Gesetzestext konnte extrahiert werden.", status_code=404)
+
         domain_name = extract_domain(url)
         title = extract_title(webpage_content)
         meta_description = extract_meta_description(webpage_content)
@@ -1188,7 +1194,7 @@ def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_
             if save_file_cli:
                 filename = f"{domain_name}_{'text' if extract_text_only else 'html'}.txt"
                 content_to_save_file = text_content if extract_text_only else webpage_content
-                save_content_to_file(content_to_save_file, url, domain_name + "_")#URL jetzt übergeben
+                save_content_to_file(content_to_save_file, url, domain_name + "_")
                 response_data["file_status"] = "success"
                 response_data["filename"] = filename
             if processed_content:
@@ -1198,6 +1204,28 @@ def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_
             return create_api_response(errors=["Fehler beim Speichern in die Datenbank"], message="Fehler beim Speichern in die Datenbank.", status_code=500)
     else:
         return create_api_response(errors=["Webseiteninhalt konnte nicht abgerufen werden"], message="Webseiteninhalt konnte nicht abgerufen werden.", status_code=500)
+
+
+@app.route('/api/v1/fetch-links', methods=['GET'])
+@require_api_key
+def api_fetch_links():
+    url_raw = request.args.get('url')
+
+    if not url_raw:
+        return create_api_response(errors=["URL Parameter fehlt"], message="URL Parameter ist erforderlich.", status_code=400)
+
+    webpage_content = fetch_webpage_content(url_raw)
+
+    if not webpage_content:
+        return create_api_response(errors=["Webseiteninhalt konnte nicht abgerufen werden"], message="Fehler beim Laden der Webseite.", status_code=500)
+
+    # Links extrahieren
+    soup = BeautifulSoup(webpage_content, 'html.parser')
+    links = [urljoin(url_raw, a['href']) for a in soup.find_all('a', href=True)]
+
+    return create_api_response(data={"links": links}, message="Links erfolgreich extrahiert.")
+
+
 
 @app.route('/api/v1/health', methods=['GET'])
 @require_api_key
