@@ -1,7 +1,7 @@
-//
-consoleneingabe:
-Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-links?url=https://www.gesetze-im-internet.de/sgb_1/" -Headers @{'X-API-Key' = $API_KEY} | ConvertFrom-Json | ForEach-Object {$links = $_.data.links; foreach ($link in $links) { Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-text?url=$($link)&save_file=true&processing_function_path=custom_processing.py" -Headers @{'X-API-Key' = $API_KEY} }}
-//
+
+# consoleneingabe:
+# Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-links?url=https://www.gesetze-im-internet.de/sgb_1/" -Headers @{'X-API-Key' = $API_KEY} | ConvertFrom-Json | ForEach-Object {$links = $_.data.links; foreach ($link in $links) { Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-text?url=$($link)&save_file=true&processing_function_path=custom_processing.py" -Headers @{'X-API-Key' = $API_KEY} }}
+
 
 # custom_processing.py
 import json
