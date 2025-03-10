@@ -29,6 +29,10 @@ from typing import List, Optional, Dict, Any
 from functools import wraps
 import threading
 from dotenv import load_dotenv
+import asyncio
+import aiohttp
+import chardet
+import mimetypes
 
 load_dotenv()
 
@@ -37,6 +41,7 @@ IS_SCHEDULED_MODE = False
 CONFIG_FILE = 'config.yaml'
 DEFAULT_CONFIG = {
     'database_file': 'webdata.db',
+    'database_type': 'sqlite', # Neu: Datenbanktyp konfigurierbar (sqlite, postgresql, mysql)
     'schedule_config_file': 'scheduled_tasks.json',
     'max_retries': 3,
     'retry_delay': 2,
@@ -65,17 +70,64 @@ DEFAULT_CONFIG = {
     ]
 }
 
+import yaml
+
+def create_default_config():
+    # Standardkonfiguration, falls config.yaml nicht vorhanden ist
+    default_config = {
+        'database_file': 'webdata.db',
+        'database_type': 'sqlite',  # Neu: Datenbanktyp konfigurierbar (sqlite, postgresql, mysql)
+        'schedule_config_file': 'scheduled_tasks.json',
+        'max_retries': 3,
+        'retry_delay': 2,
+        'allowed_processing_function_name': 'process_data',
+        'processing_functions_dir': '.',
+        'log_level': 'INFO',
+        'api_debug_mode': True,
+        'api_keys': [],
+        'rate_limit_enabled': True,
+        'rate_limit_requests_per_minute': 20,
+        'cache_enabled': True,
+        'cache_expiry_seconds': 600,
+        'selenium_config': {
+            'headless': True,
+            'disable_gpu': True,
+            'disable_extensions': True,
+            'no_sandbox': True,
+            'disable_dev_shm_usage': True,
+            'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        },
+        'allowed_css_properties': [
+            'color', 'font-size', 'background-color', 'margin', 'padding',
+            'text-align', 'font-weight', 'text-decoration', 'font-family',
+            'border', 'border-radius', 'width', 'height', 'display', 'visibility',
+            'opacity', 'cursor', 'list-style-type', 'vertical-align'
+        ]
+    }
+
+    try:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
+            yaml.dump(default_config, file, default_flow_style=False, allow_unicode=True)
+        logging.info(f"Standard-Konfigurationsdatei '{CONFIG_FILE}' erstellt.")
+    except Exception as e:
+        logging.error(f"Fehler beim Erstellen der Konfigurationsdatei '{CONFIG_FILE}': {e}", exc_info=True)
+
 def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        logging.warning(f"Konfigurationsdatei '{CONFIG_FILE}' nicht gefunden. Erstelle Standard-Konfiguration.")
+        create_default_config()
+
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as file:
             config = yaml.safe_load(file) or {}
     except FileNotFoundError:
-        logging.warning(f"Konfigurationsdatei '{CONFIG_FILE}' nicht gefunden. Verwende Standardkonfiguration.")
+        logging.warning(f"Konfigurationsdatei '{CONFIG_FILE}' konnte nicht geladen werden. Verwende Standardkonfiguration.")
         config = {}
 
     merged_config = {**DEFAULT_CONFIG, **config}
 
     api_keys_env = [os.getenv(f'API_KEY_{i+1}') for i in range(3) if os.getenv(f'API_KEY_{i+1}')]
+
     api_keys_yaml = config.get('api_keys', [])
     merged_config['api_keys'] = set(api_keys_env) | set(api_keys_yaml)
 
@@ -89,7 +141,9 @@ def load_config():
 
 config = load_config()
 
+
 DATABASE_FILE = config['database_file']
+DATABASE_TYPE = config.get('database_type', DEFAULT_CONFIG['database_type']).lower() # Use .get with default from DEFAULT_CONFIG if missing
 SCHEDULE_CONFIG_FILE = config['schedule_config_file']
 MAX_RETRIES = config['max_retries']
 RETRY_DELAY = config['retry_delay']
@@ -234,38 +288,87 @@ class ScheduledTaskUpdatePayload(BaseModel):
         return data
 
 def init_db():
+    global DATABASE_TYPE  # Stelle sicher, dass auf die globale Variable zugegriffen wird.
     conn = None
     try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                id TEXT PRIMARY KEY,
-                url TEXT NOT NULL,
-                schedule_time TEXT NOT NULL,
-                text_only INTEGER,
-                stopwords TEXT,
-                css_selectors TEXT,
-                save_file INTEGER,
-                processing_function_path TEXT,
-                status TEXT,
-                start_time TEXT,
-                end_time TEXT,
-                last_run_time TEXT,
-                next_run_time TEXT,
-                error_message TEXT
-            )
-        """)
-        conn.commit()
-        logging.info("Datenbank initialisiert oder Tabelle 'scheduled_tasks' gefunden.")
+        if DATABASE_TYPE == 'sqlite':
+            conn = sqlite3.connect(DATABASE_FILE)
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                    id TEXT PRIMARY KEY,
+                    url TEXT NOT NULL,
+                    schedule_time TEXT NOT NULL,
+                    text_only INTEGER,
+                    stopwords TEXT,
+                    css_selectors TEXT,
+                    save_file INTEGER,
+                    processing_function_path TEXT,
+                    status TEXT,
+                    start_time TEXT,
+                    end_time TEXT,
+                    last_run_time TEXT,
+                    next_run_time TEXT,
+                    error_message TEXT
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS web_content (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain TEXT,
+                    url TEXT UNIQUE,
+                    title TEXT,
+                    meta_description TEXT,
+                    h1_headings TEXT,
+                    keywords TEXT,
+                    html_content TEXT,
+                    text_content TEXT,
+                    processed_content TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            logging.info(f"Datenbank (SQLite) initialisiert oder Tabellen gefunden in: {DATABASE_FILE}")
+        elif DATABASE_TYPE == 'postgresql':
+            # PostgreSQL-Implementierung hier einfügen
+            logging.warning("PostgreSQL-Unterstützung ist noch nicht vollständig implementiert.")
+        elif DATABASE_TYPE == 'mysql':
+            # MySQL-Implementierung hier einfügen
+            logging.warning("MySQL-Unterstützung ist noch nicht vollständig implementiert.")
+        else:
+            logging.error(f"Ungültiger Datenbanktyp: {DATABASE_TYPE}. Fallback auf SQLite.")
+            DATABASE_TYPE = 'sqlite'  # Setze auf den Fallback-Datenbanktyp
+            conn = sqlite3.connect(DATABASE_FILE)
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                    id TEXT PRIMARY KEY,
+                    url TEXT NOT NULL,
+                    schedule_time TEXT NOT NULL,
+                    text_only INTEGER,
+                    stopwords TEXT,
+                    css_selectors TEXT,
+                    save_file INTEGER,
+                    processing_function_path TEXT,
+                    status TEXT,
+                    start_time TEXT,
+                    end_time TEXT,
+                    last_run_time TEXT,
+                    next_run_time TEXT,
+                    error_message TEXT
+                )
+            """)
+            conn.commit()
+            logging.info(f"Datenbank (SQLite Fallback) initialisiert in: {DATABASE_FILE}")
     except sqlite3.Error as e:
-        logging.error(f"Kritischer Fehler bei der Datenbankinitialisierung: {e}. Programm wird beendet.", exc_info=True)
+        logging.error(f"Fehler bei der Datenbankinitialisierung: {e}", exc_info=True)
         if conn:
             conn.close()
         exit(1)
     finally:
         if conn:
             conn.close()
+
 
 def save_scheduled_task_to_db(task_data):
     conn = None
@@ -363,8 +466,7 @@ def update_scheduled_task_in_db(task_id, task_data):
         logging.error(f"Fehler beim Aktualisieren des geplanten Tasks '{task_id}' in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 def delete_scheduled_task_from_db(task_id):
     conn = None
@@ -385,8 +487,7 @@ def delete_scheduled_task_from_db(task_id):
         logging.error(f"Fehler beim Löschen des geplanten Tasks '{task_id}' aus der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 def update_scheduled_task_status_db(task_id, start_time, status, error_message=None, next_run_time=None):
     conn = None
@@ -409,8 +510,7 @@ def update_scheduled_task_status_db(task_id, start_time, status, error_message=N
         logging.error(f"Fehler beim Aktualisieren des Status für Task '{task_id}' in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 def update_scheduled_task_running_status_db(task_id, status):
     conn = None
@@ -427,29 +527,13 @@ def update_scheduled_task_running_status_db(task_id, status):
         logging.error(f"Fehler beim Aktualisieren des Status für Task '{task_id}' in der Datenbank (Rollback durchgeführt): {e}", exc_info=True)
         return False
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 def save_to_db(url, domain_name, title, meta_description, h1_headings, keywords, webpage_content, text_content, processed_content):
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS web_content (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT,
-                url TEXT UNIQUE,
-                title TEXT,
-                meta_description TEXT,
-                h1_headings TEXT,
-                keywords TEXT,
-                html_content TEXT,
-                text_content TEXT,
-                processed_content TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
         h1_headings_json = json.dumps(h1_headings, ensure_ascii=False) if h1_headings else None
         keywords_json = json.dumps(keywords, ensure_ascii=False) if keywords else None
         cursor.execute("""
@@ -467,8 +551,7 @@ def save_to_db(url, domain_name, title, meta_description, h1_headings, keywords,
             exit(1)
         return False
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 def extract_domain(url: str) -> Optional[str]:
     if not is_valid_url(url):
@@ -495,6 +578,72 @@ def is_valid_url(url: str) -> bool:
         return False
     return True
 
+
+
+
+def is_unsupported_format(url, headers):
+    # Prüfen auf PDFs und EPUBs anhand der Dateiendung oder Content-Type
+    if url.lower().endswith('.pdf') or url.lower().endswith('.epub'):
+        return True
+    
+    # Prüfen des Content-Type-Headers auf PDF oder EPUB
+    content_type = headers.get('Content-Type', '')
+    if 'pdf' in content_type.lower() or 'epub' in content_type.lower():
+        return True
+    
+    return False
+
+async def async_fetch_webpage_content(url, retry_count=0, session=None):
+    # Vorab-Check: Überspringe PDFs oder EPUBs
+    headers = {}  # Füge hier den Header abgerufen von der Anfrage hinzu
+    if is_unsupported_format(url, headers):
+        logging.info(f"URL '{url}' verweist auf ein nicht unterstütztes Format (PDF/EPUB) und wird übersprungen.")
+        return None
+    
+    cached_content = get_cached_content(url)
+    if cached_content:
+        return cached_content
+    if retry_count >= MAX_RETRIES:
+        logging.error(f"Maximale Wiederholungsversuche für URL '{url}' erreicht (asynchron).")
+        return None
+    if not is_valid_url(url):
+        logging.error(f"Ungültige URL '{url}' (asynchron). Abrufen abgebrochen.")
+        return None
+
+    try:
+        logging.info(f"Starte asynchronen Abruf für URL: {url} (Versuch {retry_count + 1})")
+        if session is None:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=30) as response:
+                    response.raise_for_status()
+                    raw_body = await response.read()
+                    detected_encoding = chardet.detect(raw_body)
+                    # Falls keine Kodierung erkannt wird, setze auf 'utf-8' als Fallback
+                    encoding = detected_encoding['encoding'] if detected_encoding['encoding'] else 'utf-8'
+                    content = raw_body.decode(encoding, errors='ignore')
+                    set_cached_content(url, content)
+                    return content
+        else:
+            async with session.get(url, timeout=30) as response:
+                response.raise_for_status()
+                raw_body = await response.read()
+                detected_encoding = chardet.detect(raw_body)
+                encoding = detected_encoding['encoding'] if detected_encoding['encoding'] else 'utf-8'
+                content = raw_body.decode(encoding, errors='ignore')
+                set_cached_content(url, content)
+                return content
+
+    except aiohttp.ClientError as e:
+        logging.error(f"Fehler beim Abrufen der Webseite '{url}': {e}.")
+        time.sleep(RETRY_DELAY)
+        return await async_fetch_webpage_content(url, retry_count + 1, session)
+    except Exception as e:
+        logging.error(f"Unerwarteter Fehler beim Abrufen der Webseite '{url}': {e}.", exc_info=True)
+        time.sleep(RETRY_DELAY)
+        return await async_fetch_webpage_content(url, retry_count + 1, session)
+
+
+
 def fetch_webpage_content(url, retry_count=0):
     cached_content = get_cached_content(url)
     if cached_content:
@@ -505,37 +654,43 @@ def fetch_webpage_content(url, retry_count=0):
     if not is_valid_url(url):
         logging.error(f"Ungültige URL '{url}'. Abrufen abgebrochen.")
         return None
-    driver = None
+
     try:
-        logging.info(f"Starte Browser für URL: {url} (Versuch {retry_count + 1})")
-        chrome_options = Options()
-        selenium_config = config['selenium_config']
-        if selenium_config.get('headless', True):
-            chrome_options.add_argument("--headless")
-        if selenium_config.get('disable_gpu', True):
-            chrome_options.add_argument("--disable-gpu")
-        if selenium_config.get('disable_extensions', True):
-            chrome_options.add_argument("--disable-extensions")
-        if selenium_config.get('no_sandbox', True):
-            chrome_options.add_argument("--no-sandbox")
-        if selenium_config.get('disable_dev_shm_usage', True):
-            chrome_options.add_argument("--disable-dev-shm-usage")
-        user_agent = selenium_config.get('user_agent', DEFAULT_CONFIG['selenium_config']['user_agent'])
-        chrome_options.add_argument(f"user-agent={user_agent}")
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        driver.get(url)
-        content = driver.page_source
-        set_cached_content(url, content)
-        return content
-    except Exception as e:
-        logging.error(f"Fehler beim Abrufen der Webseite '{url}': {e}.")
-        time.sleep(RETRY_DELAY)
-        return fetch_webpage_content(url, retry_count + 1)
-    finally:
-        if driver:
-            driver.quit()
-            logging.info(f"Browser geschlossen für URL: {url}")
+        logging.info(f"Starte asynchronen Abruf (aiohttp) für URL: {url} (Versuch {retry_count + 1})")
+        return asyncio.run(async_fetch_webpage_content(url))
+    except Exception as e_aiohttp:
+        logging.warning(f"Asynchroner Abruf mit aiohttp fehlgeschlagen für URL '{url}': {e_aiohttp}. Fallback zu Selenium...", exc_info=True)
+        driver = None
+        try:
+            logging.info(f"Starte Browser (Selenium Fallback) für URL: {url} (Versuch {retry_count + 1})")
+            chrome_options = Options()
+            selenium_config = config['selenium_config']
+            if selenium_config.get('headless', True):
+                chrome_options.add_argument("--headless")
+            if selenium_config.get('disable_gpu', True):
+                chrome_options.add_argument("--disable-gpu")
+            if selenium_config.get('disable_extensions', True):
+                chrome_options.add_argument("--disable-extensions")
+            if selenium_config.get('no_sandbox', True):
+                chrome_options.add_argument("--no-sandbox")
+            if selenium_config.get('disable_dev_shm_usage', True):
+                chrome_options.add_argument("--disable-dev-shm-usage")
+            user_agent = selenium_config.get('user_agent', DEFAULT_CONFIG['selenium_config']['user_agent'])
+            chrome_options.add_argument(f"user-agent={user_agent}")
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.get(url)
+            content = driver.page_source
+            set_cached_content(url, content)
+            return content
+        except Exception as e_selenium:
+            logging.error(f"Fehler beim Abrufen der Webseite '{url}' mit Selenium (Fallback): {e_selenium}")
+            time.sleep(RETRY_DELAY)
+            return fetch_webpage_content(url, retry_count + 1)
+        finally:
+            if driver:
+                driver.quit()
+                logging.info(f"Browser geschlossen für URL: {url}")
 
 def extract_text_content(html_content):
     try:
@@ -598,6 +753,20 @@ def extract_keywords(text_content, top_n=10, custom_stopwords=None):
         return []
 
 def is_safe_css_selector(selector: str) -> bool:
+    """
+    Validiert CSS-Selektoren auf Sicherheit, um XSS/CSS-Injection zu verhindern.
+
+    Implementierte Validierungsmethoden:
+    1.  **Blacklist-Prüfung**:  Überprüft auf unsichere Muster wie `<script>`, `javascript:`, `expression()` und `@import`.
+        Diese Muster sind typisch für Injection-Angriffe und werden blockiert.
+    2.  **Whitelist für CSS-Eigenschaften**:  Falls der Selektor Stilangaben enthält (innerhalb von `{}`), wird geprüft,
+        ob die verwendeten CSS-Eigenschaften in der `ALLOWED_CSS_PROPERTIES` Whitelist enthalten sind. Nur erlaubte
+        Eigenschaften sind zulässig.
+
+    Diese Validierung bietet einen grundlegenden Schutz gegen gängige Injection-Techniken. Es ist jedoch wichtig zu
+    beachten, dass keine Validierungsmethode eine vollständige Sicherheit garantieren kann. Eine sorgfältige Prüfung
+    und das Prinzip der minimalen Privilegien bei der Verarbeitung von Benutzerdaten sind weiterhin entscheidend.
+    """
     if not isinstance(selector, str) or not selector.strip():
         return False
 
@@ -698,15 +867,14 @@ def extract_data_css(html_content, css_selectors_json):
 
     return extracted_data
 
-def save_content_to_file(content, url, filename_prefix):  # URL wird jetzt übergeben
+def save_content_to_file(content, url, filename_prefix):
     try:
-        # Sanitize die URL, um sie als Dateinamen zu verwenden
         url_path = urlparse(url).path
-        filename_suffix = re.sub(r'[^a-zA-Z0-9_.-]', '_', url_path)  # Ersetze ungültige Zeichen durch _
+        filename_suffix = re.sub(r'[^a-zA-Z0-9_.-]', '_', url_path)
         if not filename_suffix:
-             filename_suffix = "_root" # Wenn Pfad leer ist
+             filename_suffix = "_root"
 
-        filename = f"{filename_prefix}{filename_suffix}.txt" #Präfix hinzugefügt
+        filename = f"{filename_prefix}{filename_suffix}.txt"
         filename_sanitized = os.path.basename(filename)
         filepath = os.path.join(".", filename_sanitized)
         with open(filepath, 'w', encoding='utf-8') as file:
@@ -764,7 +932,7 @@ def load_processing_function(function_path):
 def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None, css_selectors_cli=None, save_file_cli=False, processing_function_path=None, task_id=None):
     start_time = datetime.datetime.now()
     error_message = None
-    status = "pending"  # Initialer Status
+    status = "pending"
 
     logging.info(f"Starte geplanten Scraping-Prozess für URL: {url} (Task-ID: {task_id}) um {start_time.isoformat()}")
     update_scheduled_task_running_status_db(task_id, 'running')
@@ -776,7 +944,7 @@ def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None
         update_scheduled_task_status_db(task_id, start_time, 'failure - invalid URL', error_message=error_message)
         return
 
-    webpage_content = fetch_webpage_content(url)
+    webpage_content = fetch_webpage_content(url) # Nutzt jetzt asynchronen Abruf primär
     if webpage_content:
         text_content = extract_text_content(webpage_content) if extract_text_only else None
         title = extract_title(webpage_content)
@@ -812,7 +980,7 @@ def scrape_and_store_url(url, extract_text_only=False, custom_stopwords_cli=None
                 filename = f"{domain_name}_html.txt"
                 content_to_save_file = webpage_content
             if content_to_save_file:
-                if save_content_to_file(content_to_save_file, url, domain_name + "_"): #URL jetzt übergeben
+                if save_content_to_file(content_to_save_file, url, domain_name + "_"):
                     logging.info(f"Inhalt für URL '{url}' zusätzlich in Datei '{filename}' gespeichert (geplanter Task ID: {task_id}).")
                 else:
                     error_message = "Fehler beim Speichern in Datei"
@@ -953,10 +1121,10 @@ def handle_validation_error(error):
 @app.route('/api/v1/', methods=['GET'])
 @require_api_key
 def api_root():
-    return create_api_response(message="Web-Scraping API V1 - Gesichert mit API-Key Authentifizierung, Rate Limiting und Caching. Erweiterte Task-Verwaltung mit Datenbank-Transaktionen, verbesserter Fehlerbehandlung und erweitertem Monitoring. **Sicherheitsgeprüftes Monitoring.**", data={
+    return create_api_response(message="Web-Scraping API V1 - Gesichert mit API-Key Authentifizierung, Rate Limiting und Caching.  Performance optimiert für typische Anwendungsfälle durch asynchrone Web-Requests. Für sehr große Datenmengen, hohe Parallelität und anspruchsvolle Scraping-Aufgaben kann eine horizontale Skalierung und der Einsatz von spezialisierten Datenbanken (PostgreSQL, MySQL) in Betracht gezogen werden. Erweiterte Task-Verwaltung mit Datenbank-Transaktionen, verbesserter Fehlerbehandlung und erweitertem Monitoring. **Sicherheitsgeprüftes Monitoring.**  CSS-Selektoren werden validiert, um Injection-Angriffe zu vermeiden (Blacklist für unsichere Muster, Whitelist für CSS-Eigenschaften). Für erhöhte Sicherheit in sensiblen Umgebungen wird empfohlen, PostgreSQL oder MySQL anstelle von SQLite zu verwenden und Datenbankverschlüsselung zu implementieren.", data={ # Hinweis zu Datenbank-Sicherheit und Performance hinzugefügt und CSS Selektor Validierung erwähnt
         "endpoints": {
-            "/api/v1/fetch-html?url=<url>&stopwords=<stopwords>&css-selectors=<json>&save-file=[true|false]&processing-function-path=<path>": "Ruft HTML-Inhalt einer Webseite ab, extrahiert Metadaten, Keywords, optionale CSS-Daten und führt optionale benutzerdefinierte Datenverarbeitungsfunktion aus. Speichert optional in Datei und Datenbank. **Sicherheitshinweis:** Seien Sie vorsichtig bei der Verwendung von 'processing-function-path' und stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen. **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**",
-            "/api/v1/fetch-text?url=<url>&stopwords=<stopwords>&css-selectors=<json>&save-file=[true|false]&processing-function-path=<path>": "Ruft Text-Inhalt einer Webseite ab, extrahiert Metadaten, Keywords, optionale CSS-Daten und führt optionale benutzerdefinierte Datenverarbeitungsfunktion aus. Speichert optional in Datei und Datenbank. **Sicherheitshinweis:** Seien Sie vorsichtig bei der Verwendung von 'processing-function-path' und stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen. **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**",
+            "/api/v1/fetch-html?url=<url>&stopwords=<stopwords>&css-selectors=<json>&save-file=[true|false]&processing-function-path=<path>": "Ruft HTML-Inhalt einer Webseite ab, extrahiert Metadaten, Keywords, optionale CSS-Daten und führt optionale benutzerdefinierte Datenverarbeitungsfunktion aus. Speichert optional in Datei und Datenbank. **Sicherheitshinweis:** Seien Sie vorsichtig bei der Verwendung von 'processing-function-path' und stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen. CSS-Selektoren werden serverseitig validiert, um XSS/CSS-Injection zu verhindern, jedoch wird eine sorgfältige Prüfung der Selektoren empfohlen. **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**", # Sicherheitshinweis zu CSS Selektoren in Endpunktbeschreibung
+            "/api/v1/fetch-text?url=<url>&stopwords=<stopwords>&css-selectors=<json>&save-file=[true|false]&processing-function-path=<path>": "Ruft Text-Inhalt einer Webseite ab, extrahiert Metadaten, Keywords, optionale CSS-Daten und führt optionale benutzerdefinierte Datenverarbeitungsfunktion aus. Speichert optional in Datei und Datenbank. **Sicherheitshinweis:** Seien Sie vorsichtig bei der Verwendung von 'processing-function-path' und stellen Sie sicher, dass Sie nur vertrauenswürdigen Code ausführen. CSS-Selektoren werden serverseitig validiert, um XSS/CSS-Injection zu verhindern, jedoch wird eine sorgfältige Prüfung der Selektoren empfohlen. **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**", # Sicherheitshinweis zu CSS Selektoren in Endpunktbeschreibung
             "/api/v1/scheduled-tasks (GET)": "Listet alle geplanten Scraping-Tasks auf. **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**",
             "/api/v1/scheduled-tasks (POST)": "Fügt einen neuen geplanten Scraping-Task hinzu (erwartet JSON im Request Body). **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**",
             "/api/v1/scheduled-tasks/<task_id> (GET)": "Ruft Details eines geplanten Scraping-Tasks anhand der Task-ID ab. **API-Key erforderlich. Rate Limiting und Caching aktiv. Datenbank-Transaktionen und sicherheitsgeprüftes Monitoring aktiv.**",
@@ -1154,10 +1322,9 @@ def api_fetch_text():
 
 def fetch_content_api(url, stopwords_param, css_selectors_param_raw, processing_function_path, save_file_cli, extract_text_only):
     logging.info(f"API Anfrage für {'Text' if extract_text_only else 'HTML'}-Inhalt von URL: {url}")
-    webpage_content = fetch_webpage_content(url)
-    
+    webpage_content = fetch_webpage_content(url) # Nutzt jetzt asynchronen Abruf primär
+
     if webpage_content:
-        # **Korrigierte Text-Extraktion**
         text_content = extract_text_content(webpage_content) if extract_text_only else webpage_content
 
         if extract_text_only and not text_content:
@@ -1214,17 +1381,15 @@ def api_fetch_links():
     if not url_raw:
         return create_api_response(errors=["URL Parameter fehlt"], message="URL Parameter ist erforderlich.", status_code=400)
 
-    webpage_content = fetch_webpage_content(url_raw)
+    webpage_content = fetch_webpage_content(url_raw) # Nutzt jetzt asynchronen Abruf primär
 
     if not webpage_content:
         return create_api_response(errors=["Webseiteninhalt konnte nicht abgerufen werden"], message="Fehler beim Laden der Webseite.", status_code=500)
 
-    # Links extrahieren
     soup = BeautifulSoup(webpage_content, 'html.parser')
     links = [urljoin(url_raw, a['href']) for a in soup.find_all('a', href=True)]
 
     return create_api_response(data={"links": links}, message="Links erfolgreich extrahiert.")
-
 
 
 @app.route('/api/v1/health', methods=['GET'])
@@ -1290,7 +1455,7 @@ def run_command_line_scraping(args):
         logging.error("Ungültige URL eingegeben.")
         return
 
-    webpage_content = fetch_webpage_content(url)
+    webpage_content = fetch_webpage_content(url) # Nutzt jetzt asynchronen Abruf primär
     if webpage_content:
         text_content = extract_text_content(webpage_content) if extract_text_only else None
         title = extract_title(webpage_content)
@@ -1323,7 +1488,7 @@ def run_command_line_scraping(args):
             filename = f"{domain_name}_{'text' if extract_text_only else 'html'}.txt"
             content_to_save_file = text_content if extract_text_only else webpage_content
             if content_to_save_file:
-                if save_content_to_file(content_to_save_file, url, domain_name + "_"): # URL jetzt übergeben
+                if save_content_to_file(content_to_save_file, url, domain_name + "_"):
                     pass
                 else:
                     logging.error("Fehler beim Speichern des Inhalts in Datei.")
@@ -1501,3 +1666,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+# streamlit run app.py -- --streamlit
+# Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-links?url=https://www.gesetze-im-internet.de/sgb_1/" -Headers @{'X-API-Key' = $API_KEY} | ConvertFrom-Json | ForEach-Object {$links = $_.data.links; foreach ($link in $links) { Invoke-WebRequest -Uri "$API_HOST/api/v1/fetch-text?url=$($link)&save_file=true&processing_function_path=custom_processing.py" -Headers @{'X-API-Key' = $API_KEY} }}
