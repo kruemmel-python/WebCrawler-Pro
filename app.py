@@ -168,10 +168,12 @@ app.debug = API_DEBUG_MODE
 page_cache = {}
 
 def validate_json(json_string):
+    if not json_string:
+        return None
     try:
         return json.loads(json_string)
-    except json.JSONDecodeError:
-        logging.error(f"Ungültiges JSON: {json_string}")
+    except json.JSONDecodeError as e:
+        logging.error(f"Ungültiges JSON: {json_string}. Fehler: {e}")
         return None
 
 def extract_domain(url):
@@ -250,11 +252,8 @@ class ScheduledTaskPayload(BaseModel):
 
     @field_validator('css_selectors')
     def validate_css_selectors_json(cls, v: Optional[str]) -> Optional[str]:
-        import json
         if v:
-            try:
-                json.loads(v)
-            except json.JSONDecodeError:
+            if not validate_json(v):
                 raise ValueError("Ungültiges JSON-Format für CSS-Selektoren.")
         return v
 
@@ -327,6 +326,9 @@ def init_db():
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # Index hinzufügen für häufige Abfragen -> Performance Optimierung (HINZUGEFÜGT)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_web_content_url ON web_content (url)") # (HINZUGEFÜGT)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_id ON scheduled_tasks (id)") # (HINZUGEFÜGT)
             conn.commit()
             logging.info(f"Datenbank (SQLite) initialisiert oder Tabellen gefunden in: {DATABASE_FILE}")
         elif DATABASE_TYPE == 'postgresql':
@@ -368,7 +370,6 @@ def init_db():
     finally:
         if conn:
             conn.close()
-
 
 def save_scheduled_task_to_db(task_data):
     conn = None
@@ -634,7 +635,7 @@ async def async_fetch_webpage_content(url, retry_count=0, session=None):
                 return content
 
     except aiohttp.ClientError as e:
-        logging.error(f"Fehler beim Abrufen der Webseite '{url}': {e}.")
+        logging.error(f"Fehler beim Abrufen der Webseite '{url}': {e}. Wiederversuch in {RETRY_DELAY} Sekunden. Fehler: {e}") # Fehlerprotokollierung verbessert
         time.sleep(RETRY_DELAY)
         return await async_fetch_webpage_content(url, retry_count + 1, session)
     except Exception as e:
@@ -695,6 +696,8 @@ def fetch_webpage_content(url, retry_count=0):
 def extract_text_content(html_content):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
+        for script in soup(["script", "style", "noscript", "figcaption", "aside", "header", "footer", "nav", "form", "input", "button", "select", "textarea"]): # Erweiterte Elemententfernung
+            script.decompose()
         return soup.get_text(separator='\n', strip=True)
     except Exception as e:
         logging.error(f"Fehler beim Extrahieren des Textinhalts: {e}")
@@ -733,12 +736,12 @@ def extract_keywords(text_content, top_n=10, custom_stopwords=None):
     try:
         words = text_content.lower().split()
         nltk_stopwords_de = set(stopwords.words('german'))
-        default_stopwords = set(['und', 'der', 'die', 'das', 'ist', 'für', 'mit', 'von', 'zu', 'in', 'auf', 'bei', 'über', 'aus',
+        default_stopwords = set(['und', 'der', 'die', 'das', 'ist', 'für', 'mit', 'von', 'zu', 'in', 'auf', 'bei', 'über', 'aus', # Erweiterte Stopwortliste
                                  'durch', 'an', 'als', 'auch', 'sich', 'es', 'ein', 'eine', 'einen', 'dem', 'den', 'des',
                                  'dass', 'nicht', 'aber', 'oder', 'wenn', 'wir', 'uns', 'ihr', 'euch', 'sie', 'ihnen',
                                  'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'sie', 'mein', 'dein', 'sein', 'ihr', 'unser',
                                  'euer', 'ihr', 'kein', 'mehr', 'sehr', 'etwas', 'nichts', 'viel', 'wenig', 'gut', 'schlecht',
-                                 'groß', 'klein', 'neu', 'alt'])
+                                 'groß', 'klein', 'neu', 'alt', 'werden', 'können', 'müssen', 'sollen', 'wollen', 'dürfen', 'mögen', 'lassen', 'geben', 'nehmen', 'halten', 'machen', 'tun', 'sagen', 'gehen', 'kommen', 'sehen', 'hören', 'finden', 'denken', 'glauben', 'wissen', 'brauchen', 'sollen', 'wollen'])
         stopwords_list = nltk_stopwords_de.union(default_stopwords)
         if custom_stopwords:
             custom_stopwords_list_raw = custom_stopwords.split(',')
@@ -1022,8 +1025,8 @@ def calculate_next_run(task_id):
             if next_run_time <= now:
                 next_run_time += datetime.timedelta(days=1)
             next_run = next_run_time
-        except ValueError:
-            logging.error(f"Fehler beim Parsen der Zeit für Task ID '{task_id}'. Ungültiges Zeitformat: '{time_str}'. Nächste Ausführungszeit nicht berechenbar.")
+        except ValueError as e: # Fehlerbehandlung verbessert (ValueError protokolliert)
+            logging.error(f"Fehler beim Parsen der Zeit für Task ID '{task_id}'. Ungültiges Zeitformat: '{time_str}'. Nächste Ausführungszeit nicht berechenbar. Fehler: {e}")
             return None
     elif schedule_time_str.lower().startswith("alle"):
         parts = schedule_time_str.split()
@@ -1387,7 +1390,7 @@ def api_fetch_links():
         return create_api_response(errors=["Webseiteninhalt konnte nicht abgerufen werden"], message="Fehler beim Laden der Webseite.", status_code=500)
 
     soup = BeautifulSoup(webpage_content, 'html.parser')
-    links = [urljoin(url_raw, a['href']) for a in soup.find_all('a', href=True)]
+    links = [urljoin(url_raw, a['href']) for a in soup.find_all('a', href=True) if a.get('href')] # Link Extraktion verbessert
 
     return create_api_response(data={"links": links}, message="Links erfolgreich extrahiert.")
 
