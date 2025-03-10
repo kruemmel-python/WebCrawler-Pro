@@ -50,6 +50,9 @@ Die folgenden Python-Bibliotheken sind für den Betrieb von WebCrawler-Pro erfor
 *   `pyyaml`
 *   `pydantic`
 *   `python-dotenv`
+*   `aiohttp`
+*   `chardet`
+*   `mimetypes`
 
 ## 3. Installation
 
@@ -82,7 +85,7 @@ Aktivieren Sie die virtuelle Umgebung:
 Installieren Sie die benötigten Python-Bibliotheken:
 
 ```bash
-pip install streamlit pandas beautifulsoup4 selenium webdriver-manager flask pyyaml pydantic nltk python-dotenv
+pip install streamlit pandas beautifulsoup4 selenium webdriver-manager flask pyyaml pydantic nltk python-dotenv aiohttp chardet mimetypes
 ```
 
 **Schritt 5: Konfiguration anpassen (optional)**
@@ -90,6 +93,7 @@ pip install streamlit pandas beautifulsoup4 selenium webdriver-manager flask pyy
 Passen Sie die `config.yaml` Datei bei Bedarf an. Wichtige Optionen:
 
 *   `database_file`
+*   `database_type` (sqlite, postgresql, mysql) - **Hinweis:** PostgreSQL und MySQL Unterstützung ist nur teilweise implementiert.
 *   `api_keys` (oder Umgebungsvariablen verwenden)
 *   `rate_limit_requests_per_minute`
 *   `cache_expiry_seconds`
@@ -302,11 +306,11 @@ Zugriff über `http://localhost:8501`.
 
 1.  URL-Validierung ✅
 2.  Cache-Prüfung 🗄️
-3.  Webseitenabruf (Selenium) 🌐
+3.  Webseitenabruf (aiohttp primär, Selenium Fallback bei Bedarf) 🌐
 4.  HTML-Parsing (Beautiful Soup) 🥣
 5.  Datenextraktion (Text, Titel, Meta-Description, H1-Headings, Keywords, CSS-Daten) 📄
 6.  Benutzerdefinierte Datenverarbeitung (optional) ⚙️
-7.  Datenbank-Speicherung 💾
+7.  Datenbank-Speicherung (SQLite) 💾
 8.  Datei-Speicherung (optional) 🗂️
 9.  Antwortgenerierung (API) / Ausgabe (Kommandozeile) 📤
 
@@ -405,7 +409,7 @@ A: Benutzerdefinierte Processing-Funktionen können beliebigen Python-Code ausf�
 
 **F: Unterstützt WebCrawler-Pro JavaScript-Rendering?**
 
-A: Ja, WebCrawler-Pro verwendet Selenium und ChromeDriver, um Webseiten abzurufen, was das Rendering von JavaScript-Inhalten ermöglicht.
+A: Ja, WebCrawler-Pro verwendet `aiohttp` für schnelle Abrufe und Selenium und ChromeDriver als Fallback, um auch Webseiten mit dynamischen JavaScript-Inhalten abzurufen und zu verarbeiten.
 
 ## 9. Glossar
 
@@ -416,14 +420,13 @@ A: Ja, WebCrawler-Pro verwendet Selenium und ChromeDriver, um Webseiten abzurufe
 *   **Rate Limiting:** ⏳ Eine Technik zur Begrenzung der Anzahl von Anfragen, die ein Benutzer oder eine Anwendung innerhalb eines bestimmten Zeitraums an eine API senden kann. Dies dient dem Schutz vor Überlastung und Missbrauch.
 *   **Caching:** 🗄️ Eine Technik zur Speicherung häufig abgerufener Daten (z.B. Webseiteninhalte) in einem temporären Speicher (Cache), um den Zugriff zu beschleunigen und die Last auf den ursprünglichen Datenquelle zu reduzieren.
 *   **Scheduled Task (Geplanter Task):** ⏱️📝 Eine Aufgabe, die automatisch zu einem vordefinierten Zeitpunkt oder in regelmäßigen Intervallen ausgeführt wird. Im Kontext von WebCrawler-Pro sind geplante Tasks Web-Scraping-Aufgaben, die automatisch nach Zeitplan ausgeführt werden.
-*   **Selenium:** 🌐 Ein Framework für die Automatisierung von Webbrowsern. WebCrawler-Pro verwendet Selenium, um Webseiten dynamisch abzurufen und JavaScript-Inhalte zu rendern.
+*   **Selenium:** 🌐 Ein Framework für die Automatisierung von Webbrowsern. WebCrawler-Pro verwendet Selenium als Fallback, um Webseiten dynamisch abzurufen und JavaScript-Inhalte zu rendern, falls der primäre Abruf mit `aiohttp` fehlschlägt.
+*   **aiohttp:** 🚀 Eine Python-Bibliothek für asynchrone HTTP-Client-/Server-Kommunikation. WebCrawler-Pro verwendet `aiohttp` als primäre Methode für schnelle und effiziente Webseitenabrufe.
 
 ## 10. Kontakt und Support
 
-**E-Mail:** 📧 support@webcrawler-pro.example.com (Platzhalter E-Mail Adresse)
+**E-Mail:** 📧 support@ciphercore.de
 
-**Webseite:** 🌐 www.webcrawler-pro.example.com (Platzhalter Webseite)
+**Webseite:** 🌐 www.ciphercore.de 
 
 Bitte beschreiben Sie Ihr Problem/Anfrage detailliert.
-
-
